@@ -1,0 +1,48 @@
+services:
+  summary-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: summary-api
+    ports:
+      - "8001:8000"  # Using 8001 to avoid conflicts with other apps
+    environment:
+      # Default model settings
+      - DEFAULT_MODEL_TYPE=ollama
+      - DEFAULT_MODEL_NAME=llama3.1
+
+      # Ollama settings (connect to host Ollama)
+      - OLLAMA_HOST=http://host.docker.internal:11434
+      - OLLAMA_MODEL=llama3.1
+
+      # Gemini API (set your key here or in .env file)
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GEMINI_MODEL=gemini-pro
+
+      # OpenAI API (set your key here or in .env file)
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_MODEL=gpt-4o-mini
+
+      # File processing
+      - MAX_FILE_SIZE_MB=50
+      - WHISPER_MODEL=base
+
+      # Debug
+      - DEBUG=false
+    volumes:
+      # Mount temp directory for file processing
+      - ./temp:/tmp/summary_api
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+# Optional: Add network if you want to connect with other containers
+networks:
+  default:
+    name: summary-api-network
