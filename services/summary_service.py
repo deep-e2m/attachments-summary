@@ -1,7 +1,7 @@
 """
 Summary service that combines document/video processing with LLM summarization.
 """
-from typing import Optional
+from typing import Optional, List, Union
 from models import get_model_provider, ModelType, BaseModelProvider
 from prompts import (
     TEXT_SUMMARY_PROMPT,
@@ -40,24 +40,42 @@ class SummaryService:
         """Get information about current model provider."""
         return self.model_provider.get_model_info()
 
+    def _format_comments(self, task_comments: Union[List[str], str]) -> str:
+        """Format task comments into numbered list."""
+        if not task_comments:
+            return "No comments provided."
+
+        if isinstance(task_comments, str):
+            return task_comments
+
+        if isinstance(task_comments, list) and len(task_comments) > 0:
+            formatted = []
+            for i, comment in enumerate(task_comments, 1):
+                formatted.append(f"Comment {i}:\n{comment}")
+            return "\n\n".join(formatted)
+
+        return "No comments provided."
+
     async def summarize_text(
         self,
         task_description: str,
-        task_comments: str = ""
+        task_comments: Union[List[str], str] = ""
     ) -> dict:
         """
         Generate summary for task description and comments.
 
         Args:
-            task_description: The task description text
-            task_comments: Optional task comments
+            task_description: The task description text (HTML)
+            task_comments: List of task comments in chronological order (HTML)
 
         Returns:
             Summary result with model info
         """
+        formatted_comments = self._format_comments(task_comments)
+
         prompt = TEXT_SUMMARY_PROMPT.format(
             task_description=task_description,
-            task_comments=task_comments or "No comments provided."
+            task_comments=formatted_comments
         )
 
         summary = await self.model_provider.generate(prompt, SYSTEM_PROMPT)
@@ -67,19 +85,22 @@ class SummaryService:
             "model_info": self.get_model_info(),
             "input": {
                 "task_description": task_description,
-                "task_comments": task_comments
+                "task_comments": task_comments,
+                "comments_count": len(task_comments) if isinstance(task_comments, list) else 1
             }
         }
 
     def summarize_text_sync(
         self,
         task_description: str,
-        task_comments: str = ""
+        task_comments: Union[List[str], str] = ""
     ) -> dict:
         """Synchronous version of summarize_text."""
+        formatted_comments = self._format_comments(task_comments)
+
         prompt = TEXT_SUMMARY_PROMPT.format(
             task_description=task_description,
-            task_comments=task_comments or "No comments provided."
+            task_comments=formatted_comments
         )
 
         summary = self.model_provider.generate_sync(prompt, SYSTEM_PROMPT)
@@ -89,7 +110,8 @@ class SummaryService:
             "model_info": self.get_model_info(),
             "input": {
                 "task_description": task_description,
-                "task_comments": task_comments
+                "task_comments": task_comments,
+                "comments_count": len(task_comments) if isinstance(task_comments, list) else 1
             }
         }
 

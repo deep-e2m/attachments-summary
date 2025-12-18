@@ -3,29 +3,29 @@ Prompt templates for summary generation.
 All outputs are in HTML format.
 """
 
-# Text Summary Prompt - HTML Output
-TEXT_SUMMARY_PROMPT = """You are an expert summarizer. Analyze the following task description and comments (which may contain HTML), then provide a clear, concise summary.
+# Text Summary Prompt - HTML Input/Output
+TEXT_SUMMARY_PROMPT = """You are an expert summarizer. Read the task description + comments below (provided as HTML) and produce a high-signal summary.
 
-Task Description:
+Comment HTML (Task Description):
 {task_description}
 
-Task Comments:
+Task Comment HTML (Additional Comments):
 {task_comments}
 
-Instructions:
-1. Identify the main objective of the task
-2. Highlight key points from the comments
-3. Note any important decisions or action items mentioned
-4. Keep the summary concise but comprehensive
+Rules:
+1. Use ONLY information present in the input. Do NOT invent details, dates, owners, or decisions.
+2. Prefer short, information-dense bullets; avoid repetition.
+3. Focus only on summarizing the content.
 
-IMPORTANT: Your response MUST be in valid HTML format. Use these HTML tags:
-- <h3> for section headings
-- <p> for paragraphs
-- <ul> and <li> for bullet points
-- <strong> for emphasis
-- <br> for line breaks if needed
+Output requirements (CRITICAL):
+- Return ONLY valid HTML (no markdown, no plain text, no code fences).
+- Use only these tags: <h3>, <p>, <ul>, <li>, <strong>, <br>
 
-Output the summary in HTML format only (no markdown, no plain text):"""
+Use this structure:
+<h3>Overview</h3>
+<p>1–3 sentences on the objective and current status.</p>
+<h3>Key Points</h3>
+<ul><li>...</li></ul>"""
 
 
 # Document Summary Prompt - HTML Output

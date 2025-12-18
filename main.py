@@ -5,23 +5,25 @@ Endpoints:
 1. POST /api/v1/summarize/text - Summarize task description and comments
 2. POST /api/v1/summarize/attachment - Summarize PDF, TXT, or DOCX files
 3. POST /api/v1/summarize/video - Transcribe and summarize video files
+
+Supports OpenRouter API for access to multiple models (GPT-4, Claude, Gemini, Llama, etc.)
 """
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, List
 from enum import Enum
 
 from config import get_settings
-from models import ModelType
+from models import ModelType, get_available_openrouter_models, OPENROUTER_MODELS
 from services import SummaryService, DocumentProcessor, VideoProcessor
 
 
 # Initialize FastAPI app
 app = FastAPI(
     title="Summary API",
-    description="API for generating summaries using multiple LLM providers (Ollama, Gemini, OpenAI)",
-    version="1.0.0"
+    description="API for generating summaries using OpenRouter (GPT-4, Claude, Gemini, Llama, etc.)",
+    version="2.0.0"
 )
 
 # Add CORS middleware
@@ -40,33 +42,32 @@ settings = get_settings()
 # Request/Response Models
 class TextSummaryRequest(BaseModel):
     """Request model for text summary endpoint."""
-    task_description: str = Field(..., description="The task description to summarize")
-    task_comments: Optional[str] = Field(default="", description="Optional task comments")
+    task_description: str = Field(..., description="The task description in HTML format to summarize")
+    task_comments_html: Optional[List[str]] = Field(
+        default=[],
+        description="List of task comments in HTML format, in chronological order (1st comment, 2nd comment, etc.)"
+    )
     model_type: Optional[str] = Field(
-        default=None,
-        description="Model type: ollama, gemini, or openai. Uses default if not specified."
+        default="openrouter",
+        description="Model provider: openrouter (recommended), ollama, gemini, or openai"
     )
     model_name: Optional[str] = Field(
         default=None,
-        description="Specific model name (e.g., llama3.1, gemini-pro, gpt-4o-mini)"
+        description="Model name. For OpenRouter use: gpt-4o, gemini-2.5-pro, claude-3.5-sonnet, etc."
     )
 
 
 class SummaryResponse(BaseModel):
     """Response model for summary endpoints."""
     success: bool
-    summary: str
-    model_info: dict
-    additional_info: Optional[dict] = None
+    summary_html: str
 
 
 class VideoSummaryResponse(BaseModel):
     """Response model for video summary endpoint."""
     success: bool
-    summary: str
+    summary_html: str
     transcript: str
-    model_info: dict
-    video_info: dict
 
 
 # Helper function to get model type
@@ -80,13 +81,15 @@ def get_model_type_enum(model_type_str: Optional[str]) -> ModelType:
     except ValueError:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid model type: {model_type_str}. Must be one of: ollama, gemini, openai"
+            detail=f"Invalid model type: {model_type_str}. Must be one of: openrouter, ollama, gemini, openai"
         )
 
 
 def get_api_key(model_type: ModelType) -> Optional[str]:
     """Get API key for the specified model type."""
-    if model_type == ModelType.GEMINI:
+    if model_type == ModelType.OPENROUTER:
+        return settings.openrouter_api_key
+    elif model_type == ModelType.GEMINI:
         return settings.gemini_api_key
     elif model_type == ModelType.OPENAI:
         return settings.openai_api_key
@@ -97,6 +100,8 @@ def get_default_model_name(model_type: ModelType) -> str:
     """Get default model name for the specified model type."""
     if model_type == ModelType.OLLAMA:
         return settings.ollama_model
+    elif model_type == ModelType.OPENROUTER:
+        return settings.openrouter_default_model
     elif model_type == ModelType.GEMINI:
         return settings.gemini_model
     elif model_type == ModelType.OPENAI:
@@ -108,14 +113,21 @@ def get_default_model_name(model_type: ModelType) -> str:
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
-    return {"status": "healthy", "version": "1.0.0"}
+    return {"status": "healthy", "version": "2.0.0"}
 
 
-# Endpoint 1: Text Summary
+# Endpoint 1: Text Summary (Supports all models via OpenRouter)
 @app.post("/api/v1/summarize/text", response_model=SummaryResponse)
 async def summarize_text(request: TextSummaryRequest):
     """
     Summarize task description and comments.
+
+    Supports multiple models via OpenRouter:
+    - gpt-4o, gpt-4o-mini (OpenAI)
+    - claude-3.5-sonnet, claude-3-opus (Anthropic)
+    - gemini-pro, gemini-flash (Google)
+    - llama-3.1-70b, llama-3.1-8b (Meta)
+    - mistral-large, mixtral-8x7b (Mistral)
 
     Args:
         request: TextSummaryRequest containing task description, comments, and model settings
@@ -126,6 +138,14 @@ async def summarize_text(request: TextSummaryRequest):
     try:
         model_type = get_model_type_enum(request.model_type)
         api_key = get_api_key(model_type)
+
+        # Check API key
+        if model_type == ModelType.OPENROUTER and not api_key:
+            raise HTTPException(
+                status_code=400,
+                detail="OpenRouter API key not configured. Please set OPENROUTER_API_KEY in .env file."
+            )
+
         model_name = request.model_name or get_default_model_name(model_type)
 
         service = SummaryService(
@@ -137,31 +157,36 @@ async def summarize_text(request: TextSummaryRequest):
 
         result = await service.summarize_text(
             task_description=request.task_description,
-            task_comments=request.task_comments or ""
+            task_comments=request.task_comments_html or []
         )
+
+        # Remove newlines from HTML
+        clean_html = result["summary"].replace("\n", "").replace("\r", "")
 
         return SummaryResponse(
             success=True,
-            summary=result["summary"],
-            model_info=result["model_info"],
-            additional_info={"input": result["input"]}
+            summary_html=clean_html
         )
 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# Endpoint 2: Attachment Summary (Gemini Only)
+# Endpoint 2: Attachment Summary (OpenRouter)
 @app.post("/api/v1/summarize/attachment", response_model=SummaryResponse)
 async def summarize_attachment(
-    file: UploadFile = File(..., description="Document file (PDF, TXT, or DOCX)")
+    file: UploadFile = File(..., description="Document file (PDF, TXT, or DOCX)"),
+    model_name: Optional[str] = Form(default=None, description="Model name (e.g., gpt-4o, claude-3.5-sonnet, gemini-pro)")
 ):
     """
     Summarize an attachment file (PDF, TXT, or DOCX).
-    Uses Gemini model only.
+    Uses OpenRouter API.
 
     Args:
         file: Uploaded document file
+        model_name: Optional model name (defaults to gpt-4o-mini)
 
     Returns:
         SummaryResponse with generated summary
@@ -183,17 +208,19 @@ async def summarize_attachment(
                 detail=f"File too large. Maximum size: {settings.max_file_size_mb}MB"
             )
 
-        # Always use Gemini for attachments
-        if not settings.gemini_api_key:
+        # Use OpenRouter
+        if not settings.openrouter_api_key:
             raise HTTPException(
                 status_code=400,
-                detail="Gemini API key not configured. Please set GEMINI_API_KEY in .env file."
+                detail="OpenRouter API key not configured. Please set OPENROUTER_API_KEY in .env file."
             )
 
+        resolved_model = model_name or settings.openrouter_default_model
+
         service = SummaryService(
-            model_type=ModelType.GEMINI,
-            model_name=settings.gemini_model,
-            api_key=settings.gemini_api_key,
+            model_type=ModelType.OPENROUTER,
+            model_name=resolved_model,
+            api_key=settings.openrouter_api_key,
             whisper_model=settings.whisper_model
         )
 
@@ -202,11 +229,12 @@ async def summarize_attachment(
             file_content=file_content
         )
 
+        # Remove newlines from HTML
+        clean_html = result["summary"].replace("\n", "").replace("\r", "")
+
         return SummaryResponse(
             success=True,
-            summary=result["summary"],
-            model_info=result["model_info"],
-            additional_info={"document_info": result["document_info"]}
+            summary_html=clean_html
         )
 
     except HTTPException:
@@ -215,17 +243,19 @@ async def summarize_attachment(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# Endpoint 3: Video Summary (Gemini Only)
+# Endpoint 3: Video Summary (OpenRouter)
 @app.post("/api/v1/summarize/video", response_model=VideoSummaryResponse)
 async def summarize_video(
-    file: UploadFile = File(..., description="Video or audio file")
+    file: UploadFile = File(..., description="Video or audio file"),
+    model_name: Optional[str] = Form(default=None, description="Model name (e.g., gpt-4o, claude-3.5-sonnet, gemini-pro)")
 ):
     """
     Transcribe video/audio and generate summary.
-    Uses Gemini model only for summarization.
+    Uses OpenRouter API for summarization.
 
     Args:
         file: Uploaded video or audio file
+        model_name: Optional model name (defaults to gpt-4o-mini)
 
     Returns:
         VideoSummaryResponse with transcript and summary
@@ -247,17 +277,19 @@ async def summarize_video(
                 detail=f"File too large. Maximum size: {settings.max_file_size_mb}MB"
             )
 
-        # Always use Gemini for video summarization
-        if not settings.gemini_api_key:
+        # Use OpenRouter
+        if not settings.openrouter_api_key:
             raise HTTPException(
                 status_code=400,
-                detail="Gemini API key not configured. Please set GEMINI_API_KEY in .env file."
+                detail="OpenRouter API key not configured. Please set OPENROUTER_API_KEY in .env file."
             )
 
+        resolved_model = model_name or settings.openrouter_default_model
+
         service = SummaryService(
-            model_type=ModelType.GEMINI,
-            model_name=settings.gemini_model,
-            api_key=settings.gemini_api_key,
+            model_type=ModelType.OPENROUTER,
+            model_name=resolved_model,
+            api_key=settings.openrouter_api_key,
             whisper_model=settings.whisper_model
         )
 
@@ -266,12 +298,13 @@ async def summarize_video(
             file_content=file_content
         )
 
+        # Remove newlines from HTML
+        clean_html = result["summary"].replace("\n", "").replace("\r", "")
+
         return VideoSummaryResponse(
             success=True,
-            summary=result["summary"],
-            transcript=result["transcript"],
-            model_info=result["model_info"],
-            video_info=result["video_info"]
+            summary_html=clean_html,
+            transcript=result["transcript"]
         )
 
     except HTTPException:
@@ -283,51 +316,61 @@ async def summarize_video(
 # Model info endpoint
 @app.get("/api/v1/models")
 async def list_available_models():
-    """List available model providers and their configurations per endpoint."""
+    """List available models via OpenRouter."""
     return {
-        "endpoints": {
-            "text_summary": {
-                "path": "/api/v1/summarize/text",
-                "supported_models": ["ollama", "gemini", "openai"],
-                "description": "Supports all three models - Ollama (llama3.1), Gemini, and OpenAI"
+        "message": "Use OpenRouter for access to all models with one API key",
+        "recommended_for_summaries": {
+            "openai": "gpt-4o",
+            "google": "gemini-2.5-pro"
+        },
+        "openrouter_models": {
+            "openai": {
+                "gpt-4o": "openai/gpt-4o",
+                "gpt-4o-mini": "openai/gpt-4o-mini",
+                "gpt-4-turbo": "openai/gpt-4-turbo"
             },
-            "attachment_summary": {
-                "path": "/api/v1/summarize/attachment",
-                "supported_models": ["gemini"],
-                "description": "Uses Gemini model only for document summarization"
+            "anthropic": {
+                "claude-3.5-sonnet": "anthropic/claude-3.5-sonnet",
+                "claude-3-opus": "anthropic/claude-3-opus",
+                "claude-3-haiku": "anthropic/claude-3-haiku"
             },
-            "video_summary": {
-                "path": "/api/v1/summarize/video",
-                "supported_models": ["gemini"],
-                "description": "Uses Gemini model only for video/audio summarization"
+            "google": {
+                "gemini-2.5-pro": "google/gemini-2.5-pro-preview-05-06",
+                "gemini-2.0-flash": "google/gemini-2.0-flash-001",
+                "gemini-pro": "google/gemini-pro-1.5",
+                "gemini-flash": "google/gemini-flash-1.5"
+            },
+            "meta": {
+                "llama-3.1-70b": "meta-llama/llama-3.1-70b-instruct",
+                "llama-3.1-8b": "meta-llama/llama-3.1-8b-instruct"
+            },
+            "mistral": {
+                "mistral-large": "mistralai/mistral-large",
+                "mixtral-8x7b": "mistralai/mixtral-8x7b-instruct"
             }
         },
-        "available_providers": [
-            {
-                "type": "ollama",
-                "description": "Local Ollama models (e.g., llama3.1)",
-                "default_model": settings.ollama_model,
-                "requires_api_key": False,
-                "used_for": ["text_summary"]
+        "usage_example": {
+            "text_summary_gpt4o": {
+                "model_type": "openrouter",
+                "model_name": "gpt-4o"
             },
-            {
-                "type": "gemini",
-                "description": "Google Gemini models",
-                "default_model": settings.gemini_model,
-                "requires_api_key": True,
-                "api_key_configured": bool(settings.gemini_api_key),
-                "used_for": ["text_summary", "attachment_summary", "video_summary"]
-            },
-            {
-                "type": "openai",
-                "description": "OpenAI models (e.g., GPT-4)",
-                "default_model": settings.openai_model,
-                "requires_api_key": True,
-                "api_key_configured": bool(settings.openai_api_key),
-                "used_for": ["text_summary"]
+            "text_summary_gemini": {
+                "model_type": "openrouter",
+                "model_name": "gemini-2.5-pro"
             }
-        ],
-        "default_provider": settings.default_model_type
+        },
+        "note": "You can use either short names (gpt-4o) or full names (openai/gpt-4o)",
+        "openrouter_api_configured": bool(settings.openrouter_api_key)
+    }
+
+
+# List all available model shortcuts
+@app.get("/api/v1/models/shortcuts")
+async def list_model_shortcuts():
+    """List all available model name shortcuts."""
+    return {
+        "shortcuts": OPENROUTER_MODELS,
+        "usage": "Use shortcut name in 'model_name' field, e.g., 'gpt-4o-mini' instead of 'openai/gpt-4o-mini'"
     }
 
 
