@@ -1,0 +1,32 @@
+{
+  "task_info": {
+    "task_number": 4,
+    "description": "Contact form issue and Typeform replacement"
+  },
+  "task_description": "Hi team, this is Karin. I just spoke with the client and her contact form is not sending responses.\n\nPlease pull all contact form responses from the last few months and export them so we can send them to her.\n\nAlso, please update the contact form on this page to use Typeform instead:\nhttps://thelawdog.com/contact/",
+  "task_comments": [
+    "@Harsh Trivedi\n\nAs requested, we've completed the following tasks:\n\nExported Contact Form Entries\nWe've exported all entries from the 2025 contact form. The exported file is attached for reference.\n\nUpdated Contact Form\nA Typeform has been created and the existing contact form on the website has been replaced with Typeform.\nPage URL: https://thelawdog.com/contact/\n\nThe Typeform is available in the Typeform dashboard with the following details:\nName: The Law Dog | Contact Form\nLink: https://admin.typeform.com/form/ouDPx9lI/create\n\nTesting\nThe form was tested using a whitelabel email.\nEmail notifications are set to: info@thelawdog.com\n\nScreen recording for reference:\nhttps://www.dropbox.com/scl/fi/we65ci071u7vioupqx2n4/the-loaw-dog-recording.webm?rlkey=bvb2t8lhuoahb5xs02hcz5xca&st=i4b1nxvr&dl=0"
+  ],
+  "models": [
+    {
+      "model_name": "gpt-4o",
+      "model_type": "openrouter"
+    },
+    {
+      "model_name": "gpt-4o-mini",
+      "model_type": "openrouter"
+    },
+    {
+      "model_name": "gemini-2.5-pro",
+      "model_type": "openrouter"
+    },
+    {
+      "model_name": "llama4-maverick",
+      "model_type": "openrouter"
+    },
+    {
+      "model_name": "llama4-scout",
+      "model_type": "openrouter"
+    }
+  ]
+}

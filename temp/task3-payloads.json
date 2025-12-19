@@ -1,0 +1,32 @@
+{
+  "task_info": {
+    "task_number": 3,
+    "description": "Website fixes and WP Rocket configuration"
+  },
+  "task_description": "We have a potential new client who is looking for website fixes and enhancements. They have shared a spreadsheet outlining their requirements.\n\nhttps://docs.google.com/document/d/1YqcyaAWTYPdbJk3OoJ-4KmWWxXTf6K6RBaIcay04Lcs/edit?tab=t.0\n\nPlease let me know if this is feasible and an estimate of how long it will take.\n\nThank you.",
+  "task_comments": [
+    "We will fully configure WP Rocket to meet the technical specifications:\n\nPage Caching\nEnable page caching for all public pages\nCache lifespan: Homepage: 4 hours, Internal pages: 8 hours\nAutomatic cache purge on content update\nSeparate cache for mobile users\nCompatibility adjustments for logged-in users\n\nFile Optimization\nMinification of HTML, CSS, and JavaScript\nCombining CSS and JS where possible\nDeferred and async loading of JavaScript\nDelayed script execution to improve mobile performance\nPreload, prefetch, and preconnect configuration\n\nBrowser Caching & GZIP\nConfigure .htaccess for: CSS/JS: 1 year, Fonts: 1 year, Images: 6 months\nEnable GZIP compression\nEnable ETag and static file versioning\n\nDatabase & Object Caching Setup\nConfigure Redis Object Cache (if supported by server)\nObject TTL: 2 hours\nOptimize database tables\nEnable query caching where applicable\n\nLazy Loading & Media Optimization\nNative lazy loading for images\nImage preloading for LCP elements\nWebP compatibility check\n\nCDN Image Loading (Optional Add-on)\nIf the client decides to use a CDN (Cloudflare / BunnyCDN / CloudFront):\nCDN zone setup and SSL configuration\nIntegrate with WP Rocket CDN module or Offload Media\nSync existing images to CDN\nRewrite media URLs\nImplement WebP with fallback\nConfigure caching TTL and hotlink protection\nImplement adaptive and responsive images\n\nDeliverables\nFully optimized caching system via WP Rocket\nImproved TTFB and mobile performance\nTechnical documentation and admin instructions\nBefore and after performance reports from: Google PageSpeed Insights, GTmetrix, WebPageTest (if required)\n\nExpected Performance Results\nTTFB under 200 ms (depending on hosting quality)\nMobile score improvement from 64 to 85-95\nFaster image loading (approximately 40-50% improvement with CDN)\n\nRequirements\nTo proceed efficiently, we require the following details:\nWebsite and server information\nDetails of any WordPress caching plugins currently in use\nCDN preference (Cloudflare recommended for optimal performance)\n\nEstimated Time and Hours\nOption 1: WP Rocket Configuration and Caching Setup - 4 to 6 hours\nOption 2: WP Rocket Configuration and Caching Setup with CDN Integration - 9 to 10 hours\n\nNotes\nThe timeline may vary based on responses, confirmations, and feedback.\nAny additional changes may impact the estimated hours.\nThe website already has good speed performance; our goal is to further enhance and fine-tune optimization for improved loading speed, stability, and overall user experience.\n\nThank you."
+  ],
+  "models": [
+    {
+      "model_name": "gpt-4o",
+      "model_type": "openrouter"
+    },
+    {
+      "model_name": "gpt-4o-mini",
+      "model_type": "openrouter"
+    },
+    {
+      "model_name": "gemini-2.5-pro",
+      "model_type": "openrouter"
+    },
+    {
+      "model_name": "llama4-maverick",
+      "model_type": "openrouter"
+    },
+    {
+      "model_name": "llama4-scout",
+      "model_type": "openrouter"
+    }
+  ]
+}

@@ -134,7 +134,11 @@ OPENROUTER_MODELS = {
     "gemini-pro": "google/gemini-pro-1.5",
     "gemini-flash": "google/gemini-flash-1.5",
 
-    # Meta Models
+    # Meta Models - Llama 4
+    "llama4-maverick": "meta-llama/llama-4-maverick",
+    "llama4-scout": "meta-llama/llama-4-scout",
+
+    # Meta Models - Llama 3.1
     "llama-3.1-70b": "meta-llama/llama-3.1-70b-instruct",
     "llama-3.1-8b": "meta-llama/llama-3.1-8b-instruct",
 

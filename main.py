@@ -42,10 +42,10 @@ settings = get_settings()
 # Request/Response Models
 class TextSummaryRequest(BaseModel):
     """Request model for text summary endpoint."""
-    task_description: str = Field(..., description="The task description in HTML format to summarize")
-    task_comments_html: Optional[List[str]] = Field(
+    task_description: str = Field(..., description="The task description (plain text) to summarize")
+    task_comments: Optional[List[str]] = Field(
         default=[],
-        description="List of task comments in HTML format, in chronological order (1st comment, 2nd comment, etc.)"
+        description="List of task comments (plain text), in chronological order (1st comment, 2nd comment, etc.)"
     )
     model_type: Optional[str] = Field(
         default="openrouter",
@@ -60,13 +60,13 @@ class TextSummaryRequest(BaseModel):
 class SummaryResponse(BaseModel):
     """Response model for summary endpoints."""
     success: bool
-    summary_html: str
+    summary: str
 
 
 class VideoSummaryResponse(BaseModel):
     """Response model for video summary endpoint."""
     success: bool
-    summary_html: str
+    summary: str
     transcript: str
 
 
@@ -157,15 +157,12 @@ async def summarize_text(request: TextSummaryRequest):
 
         result = await service.summarize_text(
             task_description=request.task_description,
-            task_comments=request.task_comments_html or []
+            task_comments=request.task_comments or []
         )
-
-        # Remove newlines from HTML
-        clean_html = result["summary"].replace("\n", "").replace("\r", "")
 
         return SummaryResponse(
             success=True,
-            summary_html=clean_html
+            summary=result["summary"]
         )
 
     except HTTPException:
@@ -229,12 +226,9 @@ async def summarize_attachment(
             file_content=file_content
         )
 
-        # Remove newlines from HTML
-        clean_html = result["summary"].replace("\n", "").replace("\r", "")
-
         return SummaryResponse(
             success=True,
-            summary_html=clean_html
+            summary=result["summary"]
         )
 
     except HTTPException:
@@ -298,12 +292,9 @@ async def summarize_video(
             file_content=file_content
         )
 
-        # Remove newlines from HTML
-        clean_html = result["summary"].replace("\n", "").replace("\r", "")
-
         return VideoSummaryResponse(
             success=True,
-            summary_html=clean_html,
+            summary=result["summary"],
             transcript=result["transcript"]
         )
 

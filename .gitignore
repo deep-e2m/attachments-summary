@@ -67,12 +67,7 @@ dmypy.json
 *.log
 logs/
 
-# Temporary files
-tmp/
-temp/
-*.tmp
-*.temp
-/tmp/
+
 
 # OS files
 .DS_Store

@@ -1,15 +1,15 @@
 """
 Prompt templates for summary generation.
-All outputs are in HTML format.
+All outputs are in plain text format.
 """
 
-# Text Summary Prompt - HTML Input/Output
-TEXT_SUMMARY_PROMPT = """You are an expert summarizer. Read the task description + comments below (provided as HTML) and produce a high-signal summary.
+# Text Summary Prompt - Plain Text Input, Plain Text Output
+TEXT_SUMMARY_PROMPT = """You are an expert summarizer. Read the task description + comments below and produce a high-signal summary.
 
-Comment HTML (Task Description):
+Task Description:
 {task_description}
 
-Task Comment HTML (Additional Comments):
+Task Comments:
 {task_comments}
 
 Rules:
@@ -18,17 +18,20 @@ Rules:
 3. Focus only on summarizing the content.
 
 Output requirements (CRITICAL):
-- Return ONLY valid HTML (no markdown, no plain text, no code fences).
-- Use only these tags: <h3>, <p>, <ul>, <li>, <strong>, <br>
+- Return ONLY plain text (no HTML, no markdown, no code fences).
+- Use simple formatting with dashes (-) for bullet points.
 
 Use this structure:
-<h3>Overview</h3>
-<p>1–3 sentences on the objective and current status.</p>
-<h3>Key Points</h3>
-<ul><li>...</li></ul>"""
+Overview:
+1-3 sentences on the objective and current status.
+
+Key Points:
+- Point 1
+- Point 2
+- etc."""
 
 
-# Document Summary Prompt - HTML Output
+# Document Summary Prompt - Plain Text Output
 DOCUMENT_SUMMARY_PROMPT = """You are an expert document analyzer. Read and summarize the following document content.
 
 Document Content:
@@ -40,17 +43,15 @@ Instructions:
 3. Note any conclusions or recommendations
 4. Maintain the logical flow of information
 
-IMPORTANT: Your response MUST be in valid HTML format. Use these HTML tags:
-- <h3> for section headings
-- <p> for paragraphs
-- <ul> and <li> for bullet points
-- <strong> for emphasis
-- <br> for line breaks if needed
+IMPORTANT: Your response MUST be in plain text format only.
+- Use clear section headings followed by colon
+- Use dashes (-) for bullet points
+- No HTML tags, no markdown
 
-Output the summary in HTML format only (no markdown, no plain text):"""
+Output the summary in plain text format only:"""
 
 
-# Video Transcript Summary Prompt - HTML Output
+# Video Transcript Summary Prompt - Plain Text Output
 VIDEO_SUMMARY_PROMPT = """You are an expert at summarizing video transcripts. Analyze the following transcript and provide a clear summary.
 
 Video Transcript:
@@ -62,14 +63,12 @@ Instructions:
 3. Note any action items or conclusions mentioned
 4. Capture the essence of the video content
 
-IMPORTANT: Your response MUST be in valid HTML format. Use these HTML tags:
-- <h3> for section headings
-- <p> for paragraphs
-- <ul> and <li> for bullet points
-- <strong> for emphasis
-- <br> for line breaks if needed
+IMPORTANT: Your response MUST be in plain text format only.
+- Use clear section headings followed by colon
+- Use dashes (-) for bullet points
+- No HTML tags, no markdown
 
-Output the summary in HTML format only (no markdown, no plain text):"""
+Output the summary in plain text format only:"""
 
 
 # System prompts for different models
@@ -80,4 +79,4 @@ Your summaries should be:
 - Comprehensive yet concise
 - Focused on the most important information
 
-CRITICAL: Always output your response in valid HTML format using tags like <h3>, <p>, <ul>, <li>, <strong>. Never use markdown or plain text."""
+CRITICAL: Always output your response in plain text format only. No HTML tags, no markdown. Use simple dashes (-) for bullet points."""
