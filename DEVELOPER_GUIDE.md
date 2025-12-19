@@ -1,4 +1,4 @@
-# Developer Guide - Summary API
+# Developer Guide - Attachment & Video Summary API
 
 This document explains how the Summary API application works from a developer's perspective.
 
@@ -57,24 +57,26 @@ User Request → FastAPI (main.py) → Service Layer → Model Provider → LLM 
 
 ### Detailed Flow
 
-When you hit `http://localhost:8000/api/v1/summarize/text`:
+When you hit `http://localhost:8000/api/v1/summarize/attachment` or `/video`:
 
 ```
-1. USER sends HTTP POST request
+1. USER sends HTTP POST request with file
         ↓
 2. FASTAPI (main.py) receives request
         ↓
-3. ENDPOINT FUNCTION validates input
+3. ENDPOINT FUNCTION validates file type and size
         ↓
 4. SUMMARY SERVICE is created with selected model
         ↓
-5. MODEL PROVIDER (Ollama/Gemini/OpenAI) is initialized
+5. FILE PROCESSOR extracts content (text or transcript)
         ↓
-6. PROMPT is formatted with user input
+6. MODEL PROVIDER (OpenRouter) is initialized
         ↓
-7. LLM generates summary
+7. PROMPT is formatted with extracted content
         ↓
-8. RESPONSE is returned as JSON
+8. LLM generates summary
+        ↓
+9. RESPONSE is returned as JSON
 ```
 
 ---
@@ -93,15 +95,20 @@ from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 
 # STEP 2: Create the application instance
 app = FastAPI(
-    title="Summary API",
-    description="API for generating summaries",
-    version="1.0.0"
+    title="Attachment & Video Summary API",
+    description="API for summarizing attachments and videos",
+    version="2.1.0"
 )
 
 # STEP 3: Define endpoints (routes)
-@app.post("/api/v1/summarize/text")
-async def summarize_text(request: TextSummaryRequest):
-    # This function runs when user hits this URL
+@app.post("/api/v1/summarize/attachment")
+async def summarize_attachment(file: UploadFile):
+    # This function runs when user uploads a document
+    pass
+
+@app.post("/api/v1/summarize/video")
+async def summarize_video(file: UploadFile):
+    # This function runs when user uploads a video
     pass
 
 # STEP 4: Run the server
@@ -129,9 +136,8 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     # These values come from .env file or environment
-    default_model_type: str = "ollama"
-    gemini_api_key: str = None
-    openai_api_key: str = None
+    openrouter_api_key: str = None
+    max_file_size_mb: int = 50
 
     class Config:
         env_file = ".env"  # ← Reads from this file
@@ -144,7 +150,7 @@ def get_settings():
 
 **How it works:**
 1. When `get_settings()` is called, it reads `.env` file
-2. Values like `GEMINI_API_KEY=xxx` become `settings.gemini_api_key`
+2. Values like `OPENROUTER_API_KEY=xxx` become `settings.openrouter_api_key`
 3. `@lru_cache()` ensures settings are loaded only once (cached)
 
 ---
@@ -156,25 +162,28 @@ Contains the instructions sent to the LLM.
 ```python
 # prompts.py
 
-TEXT_SUMMARY_PROMPT = """You are an expert summarizer...
+DOCUMENT_SUMMARY_PROMPT = """You are an expert document analyzer...
 
-Task Description:
-{task_description}      ← Placeholder replaced with actual input
+Document Content:
+{document_content}      ← Placeholder replaced with extracted text
 
-Task Comments:
-{task_comments}         ← Placeholder replaced with actual input
+Output the summary in plain text format..."""
 
-Output the summary in HTML format..."""
+VIDEO_SUMMARY_PROMPT = """You are an expert at summarizing video transcripts...
+
+Video Transcript:
+{transcript}            ← Placeholder replaced with transcript
+
+Output the summary in plain text format..."""
 ```
 
 **How placeholders work:**
 ```python
 # In summary_service.py
-prompt = TEXT_SUMMARY_PROMPT.format(
-    task_description="User's task description",
-    task_comments="User's comments"
+prompt = DOCUMENT_SUMMARY_PROMPT.format(
+    document_content="Extracted text from PDF/DOCX/TXT"
 )
-# Result: Placeholders {task_description} and {task_comments} are replaced
+# Result: Placeholder {document_content} is replaced
 ```
 
 ---
@@ -200,36 +209,29 @@ class BaseModelProvider(ABC):
 ```
 
 **Why use abstract class?**
-- Ensures all providers (Ollama, Gemini, OpenAI) have the same interface
+- Ensures all providers (Ollama, Gemini, OpenAI, OpenRouter) have the same interface
 - You can swap providers without changing other code
 
 ---
 
-#### `models/ollama_provider.py` - Ollama Implementation
+#### `models/openrouter_provider.py` - OpenRouter Implementation
 
 ```python
-# models/ollama_provider.py
+# models/openrouter_provider.py
 
-import ollama
-
-class OllamaProvider(BaseModelProvider):
-    def __init__(self, model_name="llama3.1"):
-        self.client = ollama.Client()
+class OpenRouterProvider(BaseModelProvider):
+    def __init__(self, model_name="gpt-4o-mini", api_key=None):
+        self.api_key = api_key
         self.model_name = model_name
 
     async def generate(self, prompt: str, system_prompt=None) -> str:
-        # Send request to local Ollama server
-        response = self.client.chat(
+        # Send request to OpenRouter API
+        response = await self.client.chat.completions.create(
             model=self.model_name,
             messages=[{"role": "user", "content": prompt}]
         )
-        return response["message"]["content"]
+        return response.choices[0].message.content
 ```
-
-**How Ollama works:**
-1. Ollama runs locally on your machine (port 11434)
-2. This provider sends HTTP requests to local Ollama
-3. Ollama processes with llama3.1 model and returns text
 
 ---
 
@@ -241,17 +243,14 @@ Creates the right provider based on user's choice.
 # models/factory.py
 
 def get_model_provider(model_type, model_name=None, api_key=None):
-    if model_type == "ollama":
+    if model_type == "openrouter":
+        return OpenRouterProvider(model_name or "gpt-4o-mini", api_key)
+    elif model_type == "ollama":
         return OllamaProvider(model_name or "llama3.1")
-    elif model_type == "gemini":
-        return GeminiProvider(model_name or "gemini-pro", api_key)
-    elif model_type == "openai":
-        return OpenAIProvider(model_name or "gpt-4o-mini", api_key)
 ```
 
 **Why Factory Pattern?**
-- User says "I want ollama" → Factory creates OllamaProvider
-- User says "I want gemini" → Factory creates GeminiProvider
+- User says "I want openrouter" → Factory creates OpenRouterProvider
 - Main code doesn't need to know implementation details
 
 ---
@@ -269,19 +268,33 @@ class SummaryService:
     def __init__(self, model_type, model_name, api_key):
         # Create the appropriate model provider
         self.model_provider = get_model_provider(model_type, model_name, api_key)
+        self.document_processor = DocumentProcessor()
+        self.video_processor = VideoProcessor()
 
-    async def summarize_text(self, task_description, task_comments):
-        # 1. Format the prompt with user input
-        prompt = TEXT_SUMMARY_PROMPT.format(
-            task_description=task_description,
-            task_comments=task_comments
-        )
+    async def summarize_document(self, filename, file_content):
+        # 1. Extract text from document
+        document_text = self.document_processor.extract_text(filename, file_content)
 
-        # 2. Send to LLM and get response
+        # 2. Format the prompt with extracted text
+        prompt = DOCUMENT_SUMMARY_PROMPT.format(document_content=document_text)
+
+        # 3. Send to LLM and get response
         summary = await self.model_provider.generate(prompt, SYSTEM_PROMPT)
 
-        # 3. Return result
-        return {"summary": summary, "model_info": self.get_model_info()}
+        return {"summary": summary}
+
+    async def summarize_video(self, filename, file_content):
+        # 1. Process video and get transcript
+        video_result = self.video_processor.process_video(filename, file_content)
+        transcript = video_result["transcript"]
+
+        # 2. Format the prompt with transcript
+        prompt = VIDEO_SUMMARY_PROMPT.format(transcript=transcript)
+
+        # 3. Send to LLM and get response
+        summary = await self.model_provider.generate(prompt, SYSTEM_PROMPT)
+
+        return {"summary": summary, "transcript": transcript}
 ```
 
 ---
@@ -351,7 +364,7 @@ class VideoProcessor:
 |--------|----------------|
 | `ollama` | Client library to talk to Ollama server |
 | `google.generativeai` | Google's Gemini API client |
-| `openai` | OpenAI API client |
+| `openai` | OpenAI/OpenRouter API client |
 | `ABC, abstractmethod` | Create abstract base class |
 
 ### `services/` imports
@@ -404,66 +417,47 @@ ports:
 
 ## Request Flow Diagram
 
-### Text Summary Flow
+### Attachment Summary Flow
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                         USER REQUEST                            │
-│  POST http://localhost:8000/api/v1/summarize/text              │
-│  Body: {"task_description": "...", "model_type": "ollama"}     │
+│  POST http://localhost:8000/api/v1/summarize/attachment         │
+│  Body: multipart/form-data with file upload                     │
 └─────────────────────────────────────────────────────────────────┘
                                 │
                                 ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                     main.py - FastAPI                           │
-│  1. Receives HTTP request                                       │
-│  2. Validates JSON body (TextSummaryRequest)                   │
-│  3. Calls summarize_text() function                            │
-└─────────────────────────────────────────────────────────────────┘
-                                │
-                                ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                 main.py - summarize_text()                      │
-│  1. Get model type from request ("ollama")                     │
-│  2. Get API key from config (if needed)                        │
-│  3. Create SummaryService with model settings                  │
+│  1. Receives HTTP request with file                             │
+│  2. Validates file type (PDF, DOCX, TXT)                        │
+│  3. Validates file size                                         │
+│  4. Calls summarize_attachment() function                       │
 └─────────────────────────────────────────────────────────────────┘
                                 │
                                 ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │              services/summary_service.py                        │
-│  1. __init__: Call factory to create OllamaProvider            │
-│  2. summarize_text(): Format prompt with user input            │
-│  3. Call model_provider.generate(prompt)                       │
+│  1. __init__: Call factory to create OpenRouterProvider         │
+│  2. summarize_document(): Extract text from file                │
+│  3. Format prompt with extracted content                        │
+│  4. Call model_provider.generate(prompt)                        │
 └─────────────────────────────────────────────────────────────────┘
                                 │
                                 ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                  models/factory.py                              │
-│  get_model_provider("ollama") → returns OllamaProvider()       │
+│              services/document_processor.py                     │
+│  1. Determine file type from extension                          │
+│  2. Extract text using appropriate library                      │
+│  3. Return extracted text content                               │
 └─────────────────────────────────────────────────────────────────┘
                                 │
                                 ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│              models/ollama_provider.py                          │
+│              models/openrouter_provider.py                      │
 │  1. generate() receives formatted prompt                        │
-│  2. Sends to Ollama server (localhost:11434)                   │
-│  3. Ollama runs llama3.1 model                                 │
-│  4. Returns generated text                                      │
-└─────────────────────────────────────────────────────────────────┘
-                                │
-                                ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                      OLLAMA SERVER                              │
-│  Running locally on port 11434                                  │
-│  Processes prompt with llama3.1 model                          │
-│  Returns: "<h3>Summary</h3><p>...</p>"                         │
-└─────────────────────────────────────────────────────────────────┘
-                                │
-                                ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                   Response travels back                         │
-│  Ollama → OllamaProvider → SummaryService → main.py → User     │
+│  2. Sends to OpenRouter API                                     │
+│  3. Returns generated summary                                   │
 └─────────────────────────────────────────────────────────────────┘
                                 │
                                 ▼
@@ -471,8 +465,7 @@ ports:
 │                      USER RESPONSE                              │
 │  {                                                              │
 │    "success": true,                                             │
-│    "summary": "<h3>Summary</h3><p>...</p>",                    │
-│    "model_info": {"provider": "OllamaProvider", "model": "..."}│
+│    "summary": "Overview: ..."                                   │
 │  }                                                              │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -487,9 +480,7 @@ ports:
 | `config.py` | Load settings from .env | App startup |
 | `prompts.py` | LLM instruction templates | When generating summaries |
 | `models/factory.py` | Create correct provider | When service is initialized |
-| `models/ollama_provider.py` | Talk to Ollama | When model_type="ollama" |
-| `models/gemini_provider.py` | Talk to Gemini API | When model_type="gemini" |
-| `models/openai_provider.py` | Talk to OpenAI API | When model_type="openai" |
+| `models/openrouter_provider.py` | Talk to OpenRouter API | When model_type="openrouter" |
 | `services/summary_service.py` | Orchestrate summary generation | Every summary request |
 | `services/document_processor.py` | Extract text from files | Attachment endpoint |
 | `services/video_processor.py` | Transcribe videos | Video endpoint |
@@ -498,12 +489,13 @@ ports:
 
 ## Summary
 
-1. **User hits API** → `main.py` receives request
-2. **Validation** → Pydantic models check input
+1. **User uploads file** → `main.py` receives request
+2. **Validation** → File type and size checked
 3. **Service Creation** → `SummaryService` is created with correct provider
-4. **Provider Selection** → Factory creates Ollama/Gemini/OpenAI provider
-5. **Prompt Formatting** → User input inserted into prompt template
-6. **LLM Call** → Provider sends prompt to LLM
-7. **Response** → HTML summary returned to user
+4. **Content Extraction** → Document processor or video processor extracts content
+5. **Provider Selection** → Factory creates OpenRouter provider
+6. **Prompt Formatting** → Extracted content inserted into prompt template
+7. **LLM Call** → Provider sends prompt to LLM
+8. **Response** → Plain text summary returned to user
 
 The port 8000 is defined in `main.py` at the bottom in `uvicorn.run()` call!

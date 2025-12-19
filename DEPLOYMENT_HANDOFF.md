@@ -1,6 +1,6 @@
 # Deployment Handoff Document
 
-**Application:** Summary API
+**Application:** Attachment & Video Summary API
 **Date:** December 2024
 **Developer Contact:** [Your Name]
 
@@ -42,8 +42,7 @@ docker build -t summary-api:latest .
 docker run -d \
   --name summary-api \
   -p 8000:8000 \
-  -e GEMINI_API_KEY=your_key_here \
-  -e OPENAI_API_KEY=your_key_here \
+  -e OPENROUTER_API_KEY=your_key_here \
   summary-api:latest
 ```
 
@@ -58,10 +57,9 @@ docker-compose up -d --build
 
 | Variable | Required | Description | Example |
 |----------|----------|-------------|---------|
-| `GEMINI_API_KEY` | **YES** | Google Gemini API key | `AIzaSy...` |
-| `OPENAI_API_KEY` | Optional | OpenAI API key (for future use) | `sk-...` |
-| `DEFAULT_MODEL_TYPE` | No | Default: `gemini` | `gemini` |
-| `GEMINI_MODEL` | No | Default: `gemini-pro` | `gemini-pro` |
+| `OPENROUTER_API_KEY` | **YES** | OpenRouter API key | `sk-or-...` |
+| `DEFAULT_MODEL_TYPE` | No | Default: `openrouter` | `openrouter` |
+| `OPENROUTER_DEFAULT_MODEL` | No | Default: `gpt-4o-mini` | `gpt-4o-mini` |
 | `MAX_FILE_SIZE_MB` | No | Default: `50` | `50` |
 | `WHISPER_MODEL` | No | Default: `base` | `base` |
 | `DEBUG` | No | Default: `false` | `false` |
@@ -69,13 +67,11 @@ docker-compose up -d --build
 ### Production .env File
 ```env
 # REQUIRED
-GEMINI_API_KEY=your_gemini_api_key_here
+OPENROUTER_API_KEY=your_openrouter_api_key_here
 
 # OPTIONAL
-OPENAI_API_KEY=your_openai_api_key_here
-DEFAULT_MODEL_TYPE=gemini
-GEMINI_MODEL=gemini-pro
-OPENAI_MODEL=gpt-4o-mini
+DEFAULT_MODEL_TYPE=openrouter
+OPENROUTER_DEFAULT_MODEL=gpt-4o-mini
 MAX_FILE_SIZE_MB=50
 WHISPER_MODEL=base
 DEBUG=false
@@ -100,7 +96,7 @@ External (443/HTTPS) → Nginx/Load Balancer → Container (8000)
 
 | Endpoint | Method | Expected Response |
 |----------|--------|-------------------|
-| `/health` | GET | `{"status": "healthy", "version": "1.0.0"}` |
+| `/health` | GET | `{"status": "healthy", "version": "2.1.0"}` |
 
 **Docker Health Check (already configured in Dockerfile):**
 ```dockerfile
@@ -116,7 +112,6 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 |----------|--------|-------------|
 | `/health` | GET | Health check |
 | `/api/v1/models` | GET | List available models |
-| `/api/v1/summarize/text` | POST | Text summarization |
 | `/api/v1/summarize/attachment` | POST | Document summarization (PDF, DOCX, TXT) |
 | `/api/v1/summarize/video` | POST | Video transcription & summarization |
 | `/docs` | GET | Swagger API documentation |
@@ -125,7 +120,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 
 ## Resource Requirements
 
-### Minimum (Text & Document only)
+### Minimum (Document only)
 | Resource | Value |
 |----------|-------|
 | CPU | 1 vCPU |
@@ -145,11 +140,10 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 
 | Service | Required | Purpose | Notes |
 |---------|----------|---------|-------|
-| **Google Gemini API** | YES | LLM for summaries | Requires API key |
-| **OpenAI API** | Optional | Alternative LLM | Requires API key |
+| **OpenRouter API** | YES | LLM for summaries | Requires API key |
 | **Ollama** | NO | Local LLM (dev only) | Not for production |
 
-**IMPORTANT:** This application calls external APIs (Gemini/OpenAI). Ensure outbound HTTPS (443) is allowed.
+**IMPORTANT:** This application calls external APIs (OpenRouter). Ensure outbound HTTPS (443) is allowed.
 
 ---
 
@@ -163,8 +157,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 ### Outbound
 | Port | Protocol | Destination | Purpose |
 |------|----------|-------------|---------|
-| 443 | TCP | generativelanguage.googleapis.com | Gemini API |
-| 443 | TCP | api.openai.com | OpenAI API |
+| 443 | TCP | openrouter.ai | OpenRouter API |
 
 ---
 
@@ -226,11 +219,11 @@ spec:
         ports:
         - containerPort: 8000
         env:
-        - name: GEMINI_API_KEY
+        - name: OPENROUTER_API_KEY
           valueFrom:
             secretKeyRef:
               name: api-secrets
-              key: gemini-api-key
+              key: openrouter-api-key
         resources:
           requests:
             memory: "1Gi"
@@ -279,7 +272,7 @@ Application logs to stdout/stderr. Recommended log collection:
 ### 1. Health Check
 ```bash
 curl https://api.yourdomain.com/health
-# Expected: {"status": "healthy", "version": "1.0.0"}
+# Expected: {"status": "healthy", "version": "2.1.0"}
 ```
 
 ### 2. API Documentation
@@ -287,11 +280,16 @@ curl https://api.yourdomain.com/health
 Open: https://api.yourdomain.com/docs
 ```
 
-### 3. Test Text Summary
+### 3. Test Attachment Summary
 ```bash
-curl -X POST "https://api.yourdomain.com/api/v1/summarize/text" \
-  -H "Content-Type: application/json" \
-  -d '{"task_description": "Test task", "task_comments": "Test comment"}'
+curl -X POST "https://api.yourdomain.com/api/v1/summarize/attachment" \
+  -F "file=@document.pdf"
+```
+
+### 4. Test Video Summary
+```bash
+curl -X POST "https://api.yourdomain.com/api/v1/summarize/video" \
+  -F "file=@video.mp4"
 ```
 
 ---
@@ -301,9 +299,9 @@ curl -X POST "https://api.yourdomain.com/api/v1/summarize/text" \
 | Issue | Solution |
 |-------|----------|
 | Container won't start | Check `docker logs summary-api` |
-| 500 errors | Check if GEMINI_API_KEY is set |
+| 500 errors | Check if OPENROUTER_API_KEY is set |
 | Timeout on video upload | Increase proxy timeout, check MAX_FILE_SIZE_MB |
-| Can't reach Gemini API | Check outbound firewall rules |
+| Can't reach OpenRouter API | Check outbound firewall rules |
 
 ---
 
@@ -314,7 +312,7 @@ curl -X POST "https://api.yourdomain.com/api/v1/summarize/text" \
 - [ ] Port 8000 exposed internally
 - [ ] Reverse proxy configured (443 → 8000)
 - [ ] SSL certificate installed
-- [ ] Outbound HTTPS allowed (for Gemini/OpenAI APIs)
+- [ ] Outbound HTTPS allowed (for OpenRouter API)
 - [ ] Health check endpoint responding
 - [ ] Swagger docs accessible at /docs
 - [ ] Test API call successful
