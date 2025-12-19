@@ -2,12 +2,11 @@
 Summary API - FastAPI application for summarizing attachments and videos.
 
 Endpoints:
-1. POST /api/v1/summarize/attachment - Summarize PDF, TXT, or DOCX files
-2. POST /api/v1/summarize/attachments - Summarize multiple files (batch)
-3. POST /api/v1/summarize/urls - Summarize documents from URLs (batch)
-4. POST /api/v1/summarize/video - Transcribe and summarize video/audio files
-5. POST /api/v1/extract/attachment - Extract content using open source libraries
-6. POST /api/v1/extract/model - Extract content using AI model directly
+1. POST /api/v1/summarize/attachments - Summarize multiple files (batch)
+2. POST /api/v1/summarize/urls - Summarize documents from URLs (batch)
+3. POST /api/v1/summarize/video - Transcribe and summarize video/audio files
+4. POST /api/v1/extract/attachment - Extract content using open source libraries
+5. POST /api/v1/extract/model - Extract content using AI model directly
 
 Supports OpenRouter API for access to multiple models (GPT-4, Claude, Gemini, Llama, etc.)
 """
@@ -30,7 +29,6 @@ app = FastAPI(
 - **POST /api/v1/extract/model** - Extract using AI model directly (GPT-4o/Gemini)
 
 **Summarize:**
-- **POST /api/v1/summarize/attachment** - Summarize single file (PDF, TXT, DOCX)
 - **POST /api/v1/summarize/attachments** - Summarize multiple files (batch)
 - **POST /api/v1/summarize/urls** - Summarize documents from URLs (batch)
 - **POST /api/v1/summarize/video** - Transcribe and summarize video/audio files

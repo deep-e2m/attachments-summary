@@ -172,69 +172,7 @@
 			"name": "Summarize",
 			"item": [
 				{
-					"name": "Summarize Attachment",
-					"request": {
-						"method": "POST",
-						"header": [],
-						"body": {
-							"mode": "formdata",
-							"formdata": [
-								{
-									"key": "file",
-									"type": "file",
-									"src": "",
-									"description": "Document file (PDF, TXT, or DOCX)"
-								},
-								{
-									"key": "model_name",
-									"value": "llama-3.1-70b",
-									"type": "text",
-									"description": "Model name (default: llama-3.1-70b). Options: llama-3.1-70b, llama-3.1-8b"
-								}
-							]
-						},
-						"url": {
-							"raw": "{{base_url}}/api/v1/summarize/attachment",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "summarize", "attachment"]
-						},
-						"description": "## Summarize an attachment file (PDF, TXT, or DOCX)\n\n1. Extracts content using open source libraries (PyPDF2, python-docx)\n2. Passes extracted content to Llama 3.1 for summary\n\n### Available Models:\n- `llama-3.1-70b` - Best quality (default)\n- `llama-3.1-8b` - Faster, lighter"
-					},
-					"response": [
-						{
-							"name": "Success",
-							"originalRequest": {
-								"method": "POST",
-								"body": {
-									"mode": "formdata",
-									"formdata": [
-										{
-											"key": "file",
-											"type": "file",
-											"src": "sample.pdf"
-										},
-										{
-											"key": "model_name",
-											"value": "llama-3.1-70b",
-											"type": "text"
-										}
-									]
-								},
-								"url": {
-									"raw": "{{base_url}}/api/v1/summarize/attachment",
-									"host": ["{{base_url}}"],
-									"path": ["api", "v1", "summarize", "attachment"]
-								}
-							},
-							"status": "OK",
-							"code": 200,
-							"_postman_previewlanguage": "json",
-							"body": "{\n    \"success\": true,\n    \"summary\": \"Overview:\\nThis document is about...\\n\\nKey Points:\\n- Point 1\\n- Point 2\\n\\nImportant Details:\\n- Detail 1\\n- Detail 2\\n\\nConclusions:\\n- None stated.\"\n}"
-						}
-					]
-				},
-				{
-					"name": "Summarize Attachments (Multiple Files)",
+					"name": "Summarize Attachments",
 					"request": {
 						"method": "POST",
 						"header": [],
@@ -297,7 +235,7 @@
 							"status": "OK",
 							"code": 200,
 							"_postman_previewlanguage": "json",
-							"body": "{\n    \"success\": true,\n    \"results\": {\n        \"doc1.pdf\": \"Overview:\\nThis document is about...\\n\\nKey Points:\\n- Point 1\\n- Point 2\",\n        \"doc2.pdf\": \"Overview:\\nThis document covers...\\n\\nKey Points:\\n- Point A\\n- Point B\"\n    },\n    \"errors\": {}\n}"
+							"body": "{\n    \"success\": true,\n    \"url\": {\n        \"doc1.pdf\": \"Overview:\\nThis document is about...\\n\\nKey Points:\\n- Point 1\\n- Point 2\",\n        \"doc2.pdf\": \"Overview:\\nThis document covers...\\n\\nKey Points:\\n- Point A\\n- Point B\"\n    },\n    \"errors\": {}\n}"
 						}
 					]
 				},

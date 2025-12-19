@@ -13,12 +13,6 @@ router = APIRouter(prefix="/api/v1/summarize", tags=["Summarize"])
 settings = get_settings()
 
 
-class SummaryResponse(BaseModel):
-    """Response model for attachment summary endpoint."""
-    success: bool
-    summary: str
-
-
 class VideoSummaryResponse(BaseModel):
     """Response model for video summary endpoint."""
     success: bool
@@ -27,81 +21,27 @@ class VideoSummaryResponse(BaseModel):
 
 
 class BatchURLResponse(BaseModel):
-    """Response model for batch summarization."""
+    """Response model for batch URL summarization."""
     success: bool
     results: Dict[str, str]
     errors: Dict[str, str]
 
 
-@router.post("/attachment", response_model=SummaryResponse)
-async def summarize_attachment(
-    file: UploadFile = File(..., description="Document file (PDF, TXT, or DOCX)"),
-    model_name: Optional[str] = Form(default="llama-3.1-70b", description="Model name (default: llama-3.1-70b)")
-):
-    """
-    ## Summarize an attachment file (PDF, TXT, or DOCX)
-
-    1. Extracts content using open source libraries (PyPDF2, python-docx)
-    2. Passes extracted content to Llama 3.1 for summary
-
-    ### Available Models:
-    - `llama-3.1-70b` - Best quality (default)
-    - `llama-3.1-8b` - Faster, lighter
-    """
-    try:
-        if not DocumentProcessor.is_supported(file.filename):
-            raise HTTPException(
-                status_code=400,
-                detail="Unsupported file type. Supported types: PDF, TXT, DOCX"
-            )
-
-        file_content = await file.read()
-        file_size_mb = len(file_content) / (1024 * 1024)
-        if file_size_mb > settings.max_file_size_mb:
-            raise HTTPException(
-                status_code=400,
-                detail=f"File too large. Maximum size: {settings.max_file_size_mb}MB"
-            )
-
-        if not settings.openrouter_api_key:
-            raise HTTPException(
-                status_code=400,
-                detail="OpenRouter API key not configured. Please set OPENROUTER_API_KEY in .env file."
-            )
-
-        resolved_model = model_name or "llama-3.1-70b"
-
-        service = SummaryService(
-            model_type=ModelType.OPENROUTER,
-            model_name=resolved_model,
-            api_key=settings.openrouter_api_key,
-            whisper_model=settings.whisper_model
-        )
-
-        result = await service.summarize_document(
-            filename=file.filename,
-            file_content=file_content
-        )
-
-        return SummaryResponse(
-            success=True,
-            summary=result["summary"]
-        )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+class BatchAttachmentResponse(BaseModel):
+    """Response model for batch attachment summarization."""
+    success: bool
+    url: Dict[str, str]
+    errors: Dict[str, str]
 
 
-@router.post("/attachments", response_model=BatchURLResponse)
+@router.post("/attachments", response_model=BatchAttachmentResponse)
 async def summarize_attachments(
     files: List[UploadFile] = File(..., description="Multiple document files (PDF, TXT, or DOCX)")
 ):
     """
     ## Summarize multiple attachment files
 
-    Accepts multiple files (PDF, TXT, or DOCX) and returns summaries for each.
+    Accepts multiple files (PDF, TXT, or DOCX) and returns individual summaries for each.
 
     ### Request:
     - Content-Type: multipart/form-data
@@ -111,9 +51,9 @@ async def summarize_attachments(
     ```json
     {
         "success": true,
-        "results": {
-            "file1.pdf": "Summary of file1...",
-            "file2.docx": "Summary of file2..."
+        "url": {
+            "document1.pdf": "Summary of document1...",
+            "document2.docx": "Summary of document2..."
         },
         "errors": {}
     }
@@ -171,9 +111,9 @@ async def summarize_attachments(
         else:
             results[filename] = summary
 
-    return BatchURLResponse(
+    return BatchAttachmentResponse(
         success=len(errors) == 0,
-        results=results,
+        url=results,
         errors=errors
     )
 
