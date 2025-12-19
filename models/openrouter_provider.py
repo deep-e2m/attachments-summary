@@ -107,6 +107,63 @@ class OpenRouterProvider(BaseModelProvider):
         except Exception as e:
             raise Exception(f"OpenRouter generation failed: {str(e)}")
 
+    async def generate_with_file(
+        self,
+        prompt: str,
+        file_content: str,
+        file_type: str = "application/pdf",
+        system_prompt: Optional[str] = None
+    ) -> str:
+        """
+        Generate a response with a file attachment (PDF).
+
+        Args:
+            prompt: The user prompt
+            file_content: Base64 encoded file content
+            file_type: MIME type of the file (default: application/pdf)
+            system_prompt: Optional system prompt
+
+        Returns:
+            Generated text response
+        """
+        messages = []
+
+        if system_prompt:
+            messages.append({
+                "role": "system",
+                "content": system_prompt
+            })
+
+        # Create message with file content
+        # For vision-capable models (GPT-4o, Gemini), we use the image_url format
+        # with base64 data URL for PDFs
+        messages.append({
+            "role": "user",
+            "content": [
+                {
+                    "type": "text",
+                    "text": prompt
+                },
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:{file_type};base64,{file_content}"
+                    }
+                }
+            ]
+        })
+
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model_name,
+                messages=messages,
+                temperature=0.3,  # Lower temperature for extraction
+                max_tokens=16000  # Allow long responses for full extraction
+            )
+            return response.choices[0].message.content
+        except Exception as e:
+            raise Exception(f"OpenRouter file processing failed: {str(e)}")
+
     def get_model_info(self) -> dict:
         """Return information about the model provider."""
         return {
