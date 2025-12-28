@@ -67,7 +67,8 @@ class OpenRouterProvider(BaseModelProvider):
             response = self.client.chat.completions.create(
                 model=self.model_name,
                 messages=messages,
-                temperature=0.7
+                temperature=0.3,  # Lower temperature for consistent detailed output
+                max_tokens=8000  # Allow long responses for detailed summaries
             )
             return response.choices[0].message.content
         except Exception as e:
@@ -101,7 +102,8 @@ class OpenRouterProvider(BaseModelProvider):
             response = self.client.chat.completions.create(
                 model=self.model_name,
                 messages=messages,
-                temperature=0.7
+                temperature=0.3,  # Lower temperature for consistent detailed output
+                max_tokens=8000  # Allow long responses for detailed summaries
             )
             return response.choices[0].message.content
         except Exception as e:

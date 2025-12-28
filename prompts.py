@@ -4,43 +4,50 @@ All outputs are in plain text format.
 """
 
 # Document Summary Prompt - Plain Text Output
-DOCUMENT_SUMMARY_PROMPT = """You are an expert document analyst. Analyze the following document and create a comprehensive summary.
+DOCUMENT_SUMMARY_PROMPT = """You are an expert technical analyst creating executive-level document summaries.
 
 Document Content:
 {document_content}
 
-TASK: Create a well-structured summary that captures all essential information.
+TASK: Create an EXHAUSTIVE, COMPREHENSIVE summary that captures EVERY detail from this document.
 
-SUMMARY STRUCTURE:
-1. Overview (2-3 sentences describing what this document is about)
-2. Key Points (main information, facts, or arguments presented)
-3. Important Details (specific data, names, dates, numbers if relevant)
-4. Conclusions/Recommendations (if any are stated in the document)
+MANDATORY REQUIREMENTS:
+1. Your summary MUST be at least 400-600 words minimum
+2. Include ALL specific details: names, numbers, percentages, timeframes, technical terms
+3. If the document has multiple sections/options, summarize EACH ONE thoroughly
+4. Include ALL features, capabilities, limitations mentioned
+5. Preserve ALL hour estimates, costs, or effort breakdowns with their specific numbers
+6. Include context like project names, website names, company names mentioned
+7. If sub-options exist within options, explain each sub-option separately
 
-GUIDELINES:
-- Be accurate - only include information that is in the document
-- Be comprehensive - don't miss important points
-- Be concise - avoid unnecessary repetition
-- Preserve specific details like names, dates, numbers, and technical terms
-- If the document has sections, reflect that structure in your summary
+STRUCTURE YOUR SUMMARY AS FOLLOWS:
 
-OUTPUT FORMAT (plain text only):
-Overview:
-[Your overview here]
+Overview/Context:
+- What is this document about? Include project name, website, companies involved
+- What is the main goal or purpose?
 
-Key Points:
-- [Point 1]
-- [Point 2]
-- [Point 3]
+[For each major option/section in the document]:
+Option/Section Name:
+- Full description of what it involves
+- ALL features and capabilities listed (do not summarize - list them all)
+- ALL limitations or constraints mentioned
+- Technical details (tools, plugins, APIs, methods)
+- Time/effort estimates with exact numbers
+- Any sub-components or breakdowns
 
-Important Details:
-- [Detail 1]
-- [Detail 2]
+Additional Considerations:
+- Any other options mentioned (even if ruled out) and why
+- Technical constraints or dependencies
+- Variables that may affect the project
 
-Conclusions:
-- [If applicable]
+CRITICAL RULES:
+- Do NOT condense or abbreviate - be thorough
+- Do NOT skip any features, capabilities, or bullet points from the original
+- Do NOT use vague language like "various features" - list them specifically
+- Include hour breakdowns (e.g., "16-18 hours for X + 25-30 hours for Y = 36-48 total")
+- Preserve technical terminology exactly as written
 
-Note: Use plain text only. No HTML, no markdown formatting."""
+Return only the summary in plain text format (no HTML, no markdown)."""
 
 
 # Video Transcript Summary Prompt - Plain Text Output
@@ -83,18 +90,21 @@ Note: Use plain text only. No HTML, no markdown formatting."""
 
 
 # System prompts for different models
-SYSTEM_PROMPT = """You are an expert summarization assistant. Your role is to create accurate, well-organized summaries.
+SYSTEM_PROMPT = """You are an expert technical analyst who creates EXHAUSTIVE document summaries for executive stakeholders.
 
-Core Principles:
-- Accuracy: Only include information present in the source material
-- Completeness: Capture all important points without omission
-- Clarity: Use clear, straightforward language
-- Structure: Organize information logically with clear sections
-- Conciseness: Be thorough but avoid unnecessary repetition
+YOUR SUMMARIES MUST:
+1. Be at least 400-600 words minimum
+2. Capture EVERY specific detail from the source document
+3. List ALL features, capabilities, and limitations individually (never say "various" or "multiple")
+4. Preserve ALL numbers: hours, costs, percentages, dates, estimates
+5. Include ALL context: project names, company names, website names, technical tools
+6. Break down each option/section thoroughly with all sub-components
+7. Never skip or condense information
 
-Output Rules:
-- Use plain text format only
-- Use dashes (-) for bullet points
-- Use colons (:) after section headers
-- No HTML tags
-- No markdown formatting (no **, no ##, no ```)"""
+FORMAT RULES:
+- Use plain text only (no HTML, no markdown)
+- Organize with clear section headings
+- Use bullet points for lists of features/capabilities
+- Preserve exact technical terminology from the source
+
+CRITICAL: Your summary should read like a comprehensive briefing document that could replace reading the original for someone who needs ALL the details."""

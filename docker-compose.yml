@@ -6,6 +6,8 @@ services:
     container_name: summary-api
     ports:
       - "8001:8000"  # Using 8001 to avoid conflicts with other apps
+    env_file:
+      - .env
     environment:
       # Default model settings
       - DEFAULT_MODEL_TYPE=ollama
@@ -15,13 +17,7 @@ services:
       - OLLAMA_HOST=http://host.docker.internal:11434
       - OLLAMA_MODEL=llama3.1
 
-      # Gemini API (set your key here or in .env file)
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - GEMINI_MODEL=gemini-pro
-
-      # OpenAI API (set your key here or in .env file)
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - OPENAI_MODEL=gpt-4o-mini
+      # Gemini and OpenAI API keys are loaded from .env file
 
       # File processing
       - MAX_FILE_SIZE_MB=50

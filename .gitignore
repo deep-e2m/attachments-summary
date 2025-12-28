@@ -103,3 +103,8 @@ whisper_models/
 # Document processing temp
 *.pdf.tmp
 *.docx.tmp
+
+
+
+# docker compelete guide    
+DOCKER_COMPLETE_GUIDE.md

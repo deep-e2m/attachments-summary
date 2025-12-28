@@ -2,13 +2,13 @@
 	"info": {
 		"_postman_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
 		"name": "Attachment & Video Summary API",
-		"description": "API for summarizing attachments and videos using OpenRouter.\n\n## Available Endpoints:\n- **Extract** - Extract content from documents\n- **Summarize** - Generate summaries from documents and videos\n- **Models** - List available models\n- **Health** - Health check\n\n## Version: 2.3.0",
+		"description": "API for summarizing attachments and videos using OpenRouter and Gemini.\n\n## Available Endpoints:\n- **Extract** - Extract content from documents\n- **Summarize** - Generate summaries from documents and videos\n- **Models** - List available models\n- **Health** - Health check\n\n## Version: 2.4.0",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"variable": [
 		{
 			"key": "base_url",
-			"value": "http://localhost:8000",
+			"value": "http://localhost:8001",
 			"type": "string"
 		}
 	],
@@ -42,7 +42,7 @@
 							"status": "OK",
 							"code": 200,
 							"_postman_previewlanguage": "json",
-							"body": "{\n    \"status\": \"healthy\",\n    \"version\": \"2.3.0\"\n}"
+							"body": "{\n    \"status\": \"healthy\",\n    \"version\": \"2.4.0\"\n}"
 						}
 					]
 				}
@@ -204,7 +204,7 @@
 							"host": ["{{base_url}}"],
 							"path": ["api", "v1", "summarize", "attachments"]
 						},
-						"description": "## Summarize multiple attachment files (Batch)\n\nAccepts multiple files (PDF, TXT, or DOCX) and returns summaries for each.\n\n### Request:\n- Content-Type: multipart/form-data\n- Field: `files` (multiple files with same key name)\n\n### Model: llama-3.1-70b (fixed)"
+						"description": "## Summarize multiple attachment files (Batch)\n\nAccepts multiple files (PDF, TXT, or DOCX) and returns summaries for each.\n\n### Request:\n- Content-Type: multipart/form-data\n- Field: `files` (multiple files with same key name)\n\n### Model: GPT-4o via OpenRouter"
 					},
 					"response": [
 						{
@@ -240,68 +240,6 @@
 					]
 				},
 				{
-					"name": "Summarize Video",
-					"request": {
-						"method": "POST",
-						"header": [],
-						"body": {
-							"mode": "formdata",
-							"formdata": [
-								{
-									"key": "file",
-									"type": "file",
-									"src": "",
-									"description": "Video or audio file"
-								},
-								{
-									"key": "model_name",
-									"value": "gpt-4o",
-									"type": "text",
-									"description": "Model name (e.g., gpt-4o, gpt-4o-mini, gemini-2.5-pro)"
-								}
-							]
-						},
-						"url": {
-							"raw": "{{base_url}}/api/v1/summarize/video",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "summarize", "video"]
-						},
-						"description": "## Transcribe and summarize video/audio files\n\n### Supported Video Types:\n- MP4, AVI, MOV, MKV, WEBM, FLV, WMV\n\n### Supported Audio Types:\n- MP3, WAV, M4A, FLAC, OGG\n\n### How it works:\n1. Audio is extracted from video using FFmpeg\n2. Transcription using Whisper\n3. Summary generated using AI model"
-					},
-					"response": [
-						{
-							"name": "Success",
-							"originalRequest": {
-								"method": "POST",
-								"body": {
-									"mode": "formdata",
-									"formdata": [
-										{
-											"key": "file",
-											"type": "file",
-											"src": "sample.mp4"
-										},
-										{
-											"key": "model_name",
-											"value": "gpt-4o",
-											"type": "text"
-										}
-									]
-								},
-								"url": {
-									"raw": "{{base_url}}/api/v1/summarize/video",
-									"host": ["{{base_url}}"],
-									"path": ["api", "v1", "summarize", "video"]
-								}
-							},
-							"status": "OK",
-							"code": 200,
-							"_postman_previewlanguage": "json",
-							"body": "{\n    \"success\": true,\n    \"summary\": \"Overview:\\nThis video is about...\\n\\nMain Topics:\\n- Topic 1\\n- Topic 2\\n\\nKey Points:\\n- Point 1\\n- Point 2\\n\\nTakeaways:\\n- Takeaway 1\",\n    \"transcript\": \"Full transcript of the video/audio content...\"\n}"
-						}
-					]
-				},
-				{
 					"name": "Summarize URLs (Batch)",
 					"request": {
 						"method": "POST",
@@ -320,7 +258,7 @@
 							"host": ["{{base_url}}"],
 							"path": ["api", "v1", "summarize", "urls"]
 						},
-						"description": "## Summarize multiple documents from URLs (Batch)\n\nAccepts a simple array of URLs pointing to PDF, TXT, or DOCX files.\nDownloads each file, extracts content, and generates summaries using Llama 3.1-70b.\n\n### Request Body:\n```json\n[\n    \"https://example.com/doc1.pdf\",\n    \"https://example.com/doc2.pdf\",\n    \"https://example.com/doc3.pdf\"\n]\n```\n\n### Model: llama-3.1-70b (fixed)"
+						"description": "## Summarize multiple documents from URLs (Batch)\n\nAccepts a simple array of URLs pointing to PDF, TXT, or DOCX files.\nDownloads each file, extracts content, and generates summaries using GPT-4o.\n\n### Request Body:\n```json\n[\n    \"https://example.com/doc1.pdf\",\n    \"https://example.com/doc2.pdf\",\n    \"https://example.com/doc3.pdf\"\n]\n```\n\n### Model: GPT-4o via OpenRouter"
 					},
 					"response": [
 						{
@@ -347,6 +285,106 @@
 							"code": 200,
 							"_postman_previewlanguage": "json",
 							"body": "{\n    \"success\": true,\n    \"results\": {\n        \"https://example.com/doc1.pdf\": \"Overview:\\nThis document is about...\\n\\nKey Points:\\n- Point 1\\n- Point 2\",\n        \"https://example.com/doc2.pdf\": \"Overview:\\nThis document covers...\\n\\nKey Points:\\n- Point A\\n- Point B\"\n    },\n    \"errors\": {}\n}"
+						}
+					]
+				},
+				{
+					"name": "Summarize Video URLs",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "[\n    \"https://example.com/video1.mp4\",\n    \"https://example.com/video2.mp4\"\n]"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/summarize/video",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "summarize", "video"]
+						},
+						"description": "## Summarize videos from URLs\n\nAccepts a list of video URLs, downloads them, uploads to Gemini File API, and generates summaries.\n\n### Request Body:\n```json\n[\n    \"https://example.com/video1.mp4\",\n    \"https://example.com/video2.mp4\"\n]\n```\n\n### Model: Gemini 2.0 Flash\n\n**Note:** Requires direct video URLs (not Loom share pages). Use the Video File endpoint for local files."
+					},
+					"response": [
+						{
+							"name": "Success",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "[\n    \"https://example.com/video1.mp4\"\n]"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/summarize/video",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "summarize", "video"]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"body": "{\n    \"success\": true,\n    \"results\": {\n        \"https://example.com/video1.mp4\": {\n            \"summary\": \"Overview:\\nThis video is about...\\n\\nMain Topics:\\n- Topic 1\\n- Topic 2\\n\\nKey Points:\\n- Point 1\\n- Point 2\",\n            \"transcript\": \"Transcript extracted by Gemini (embedded in summary)\"\n        }\n    },\n    \"errors\": {}\n}"
+						}
+					]
+				},
+				{
+					"name": "Summarize Video File (Gemini 2.5 Pro)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "file",
+									"type": "file",
+									"src": "",
+									"description": "Video file (MP4, MOV, AVI, MKV, WEBM, FLV, WMV)"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/summarize/video/file",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "summarize", "video", "file"]
+						},
+						"description": "## Summarize uploaded video file using Gemini 2.5 Pro\n\nUpload a video file directly and get a comprehensive summary using Google Gemini 2.5 Pro.\n\n### Supported Video Types:\n- MP4, MOV, AVI, MKV, WEBM, FLV, WMV, M4V\n\n### Request:\n- Content-Type: multipart/form-data\n- Field: `file` (video file)\n\n### Model: Gemini 2.5 Pro\n\n### How it works:\n1. Video is uploaded to Gemini File API\n2. Gemini 2.5 Pro analyzes the video content\n3. Returns detailed summary with overview, topics, key points, and takeaways"
+					},
+					"response": [
+						{
+							"name": "Success",
+							"originalRequest": {
+								"method": "POST",
+								"body": {
+									"mode": "formdata",
+									"formdata": [
+										{
+											"key": "file",
+											"type": "file",
+											"src": "sample.mp4"
+										}
+									]
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/summarize/video/file",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "summarize", "video", "file"]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"body": "{\n    \"success\": true,\n    \"summary\": \"Overview:\\nThis video demonstrates...\\n\\nMain Topics:\\n- Topic 1: Description\\n- Topic 2: Description\\n\\nKey Points:\\n- Important point 1\\n- Important point 2\\n- Important point 3\\n\\nPeople/Speakers:\\n- Speaker name and their main points\\n\\nVisual Content:\\n- Description of on-screen content\\n\\nAction Items/Takeaways:\\n- Takeaway 1\\n- Takeaway 2\",\n    \"filename\": \"sample.mp4\"\n}"
 						}
 					]
 				}
@@ -382,7 +420,7 @@
 							"status": "OK",
 							"code": 200,
 							"_postman_previewlanguage": "json",
-							"body": "{\n    \"extraction\": {\n        \"open_source\": [\"PyPDF2 (PDF)\", \"python-docx (DOCX)\", \"built-in (TXT)\"],\n        \"ai_models\": [\"gpt-4o\", \"gemini-2.5-pro\"]\n    },\n    \"summarization\": {\n        \"attachments\": [\"llama-3.1-70b\", \"llama-3.1-8b\"],\n        \"video\": [\"gpt-4o\", \"gpt-4o-mini\", \"gemini-2.5-pro\"]\n    }\n}"
+							"body": "{\n    \"extraction\": {\n        \"open_source\": [\"PyPDF2 (PDF)\", \"python-docx (DOCX)\", \"built-in (TXT)\"],\n        \"ai_models\": [\"gpt-4o\", \"gemini-2.5-pro\"]\n    },\n    \"summarization\": {\n        \"attachments\": [\"gpt-4o\"],\n        \"video_urls\": [\"gemini-2.0-flash\"],\n        \"video_file\": [\"gemini-2.5-pro\"]\n    }\n}"
 						}
 					]
 				}
