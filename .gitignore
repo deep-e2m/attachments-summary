@@ -67,11 +67,8 @@ dmypy.json
 *.log
 logs/
 
-# Temp files
-temp/*
-!temp/videos/
-temp/videos/*
-!temp/videos/.gitkeep
+ # Temp files
+temp/
 *.tmp
 *.temp
 /tmp/
@@ -94,20 +91,12 @@ temp_uploads/
 # Whisper model cache
 whisper_models/
 
-# FFmpeg temp files
-*.wav.tmp
-*.mp3.tmp
-
-# Video/Audio temporary files
-*.mp4.tmp
-*.avi.tmp
-*.mov.tmp
-
-# Document processing temp
-*.pdf.tmp
-*.docx.tmp
-
+   
 
 
 # docker compelete guide    
 DOCKER_COMPLETE_GUIDE.md
+
+
+# videos
+videos/
