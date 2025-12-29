@@ -67,8 +67,11 @@ dmypy.json
 *.log
 logs/
 
- # Temp files
-temp/
+# Temp files
+temp/*
+!temp/videos/
+temp/videos/*
+!temp/videos/.gitkeep
 *.tmp
 *.temp
 /tmp/
