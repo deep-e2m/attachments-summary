@@ -97,3 +97,7 @@ whisper_models/
 # Document processing temp
 *.pdf.tmp
 *.docx.tmp
+
+
+#videos
+videos/
