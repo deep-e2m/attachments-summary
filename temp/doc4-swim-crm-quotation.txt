@@ -1,0 +1,179 @@
+==========================================
+DOCUMENT 4: Swim CRM Time & Scope Quotation.pdf
+==========================================
+File Type: .pdf
+
+==========================================
+PAYLOAD - Extract Attachment (Open Source)
+==========================================
+Endpoint: POST /api/v1/extract/attachment
+Form Data:
+  - file: Swim CRM Time & Scope Quotation.pdf
+
+==========================================
+OUTPUT - Extract Attachment (Open Source)
+==========================================
+Method: PyPDF2 library
+Content Length: 5728 characters
+
+Extracted Content:
+-------------------
+Time & Scope Quotation
+Swim Academy CRM - GoHighLevel Implementation
+Group Lesson Registration & Payment System
+
+1. Summary
+
+This quotation covers the implementation of GoHighLevel (GHL) as the primary system for swimmer registration, payments, and communications for 6-week group swim lesson sessions. The implementation replaces WooCommerce and manual spreadsheets with a streamlined, repeatable workflow.
+
+Total Estimated Time: 25 hours
+
+2. Time Estimate Summary
+
+Phase                                           Estimated Hours
+Phase 1: Core Registration & Payment (MVP)      15 hrs
+Phase 2: Session Management & Communications    10 hrs
+TOTAL                                           25 hrs
+
+3. Phase 1: Core Registration & Payment (MVP)
+
+MVP launch enabling online registration and payment for 6-week group swim lessons.
+
+Task                                                    Deliverable
+Pipeline, custom fields, tags setup                     Data Model
+5 Group calendars (Levels 1-5) with availability       Calendars
+Registration form + field mapping + waivers            Form
+Payment flow configuration                             Payments
+Core booking workflow (contact/opp, tags, email/SMS)   Automation
+Roster views / Smart Lists                             Rosters
+Testing + admin walkthrough (Loom)                     QA + Docs
+
+4. Phase 2: Session Management & Communications
+
+Repeatable session setup, reminders, bulk messaging, and basic reporting.
+
+Task                                                    Deliverable
+Session template/cloning process + checklist           Template
+Weekly reminder automation (email + SMS)               Workflow
+Smart Lists (session/day/time filters)                 Lists
+Cancellation/change email + SMS templates              Templates
+Basic reporting (enrollment/revenue by session)        Dashboard
+
+5. What GoHighLevel Handles Well
+
+The following functionality is native to GHL and will be implemented without custom development:
+
+- Pipeline + opportunity custom fields for swimmer/session data
+- Group calendars with capacity limits per time slot
+- Form builder with field mapping to contacts/opportunities
+- Native Stripe integration for payment processing
+- Workflow automations (triggers, actions, tagging, email/SMS)
+- Smart Lists for filtering contacts by session/level/day
+- Email and SMS templates for bulk communications
+- Review generation campaigns
+- Private lesson workflows and calendars
+- Automated progress/performance emails via instructor input forms
+- Basic dashboard widgets for enrollment counts
+
+6. Out of Scope
+
+The following items are explicitly excluded from this engagement:
+
+- Instructor/staff tools (on-deck skill tracking, instructor dashboards)
+- Swim team platform integrations
+- Makeup class tracking and automated rescheduling logic
+- Deep historical data migration and deduplication
+- Custom-coded portals or web applications
+
+7. GHL Platform Limitations
+
+Be aware of this platform constraint:
+
+- No native child records: Swimmers are tracked via Opportunity fields, not as separate child contacts. Multi-child families require multiple opportunities.
+
+8. Assumptions
+
+This estimate assumes:
+
+- Client provides all required assets before work begins (see below)
+- The client will complete Stripe integration, or will provide us with the Stripe account access, or we can guide them on this integration.
+- GHL account is active with the required subscription level
+- Single round of revisions included per phase
+- Existing website remains the marketing front-end (links to GHL for registration)
+
+9. Client Prerequisites
+
+To meet the estimated timeline, the following must be provided before kickoff:
+
+- Finalized 6-week session pricing
+- Approved liability waiver text (from legal/insurance)
+- Photo/media consent text
+- Class capacity limits by level and time slot
+- Weekend schedule (days, times, duration per class)
+- GHL account admin access
+- Session start/end dates for initial setup
+
+10. Deliverables Summary
+
+Phase 1 Deliverables:
+1. Configured Swim Lessons pipeline with custom fields and tags
+2. 5 group lesson calendars (Levels 1-5) with correct availability/capacity
+3. Registration form with waiver/consent integration
+4. Payment flow configured (client completes Stripe connection)
+5. Core booking workflow (contact/opportunity creation, tagging, confirmation email/SMS)
+6. Roster Smart Lists for each session/time slot
+7. Admin walkthrough video (Loom)
+
+Phase 2 Deliverables:
+1. Session naming convention implemented across the system
+2. New Session Setup Checklist document
+3. Weekly reminder workflow (email + optional SMS)
+4. Smart Lists for session-wide, day-based, and time slot filtering
+5. Email/SMS templates for cancellations and schedule changes
+6. Basic enrollment/revenue reporting views
+7. Admin training on session setup and bulk communications
+
+==========================================
+PAYLOAD - Extract Model (AI)
+==========================================
+Endpoint: POST /api/v1/extract/model
+Form Data:
+  - file: Swim CRM Time & Scope Quotation.pdf
+  - model_name: gpt-4o
+
+==========================================
+OUTPUT - Extract Model (GPT-4o)
+==========================================
+Status: FAILED
+Error: OpenRouter file processing failed - Provider returned error: "Invalid image URL. The URL must be a valid HTTP or HTTPS URL, or a data URL with base64 encoding."
+
+Note: This error occurs due to OpenRouter/Azure API limitations with PDF file handling. The open source extraction method (PyPDF2) successfully extracted the content above.
+
+==========================================
+PAYLOAD - Summarize Attachment
+==========================================
+Endpoint: POST /api/v1/summarize/attachment
+Form Data:
+  - file: Swim CRM Time & Scope Quotation.pdf
+  - model_name: llama-3.1-70b
+
+==========================================
+OUTPUT - Summary (Llama 3.1-70b)
+==========================================
+Overview:
+This document is a quotation for the implementation of GoHighLevel (GHL) as the primary system for swimmer registration, payments, and communications for 6-week group swim lesson sessions. The implementation aims to replace WooCommerce and manual spreadsheets with a streamlined, repeatable workflow. The total estimated time for this project is 25 hours.
+
+Key Points:
+- The implementation will cover online registration and payment for 6-week group swim lessons, as well as session management and communications.
+- The project will be divided into two phases: Core Registration & Payment (MVP) and Session Management & Communications.
+- The implementation will utilize GHL's native functionality, including pipeline and opportunity custom fields, group calendars, form builder, native Stripe integration, and workflow automations.
+- The project excludes instructor/staff tools, swim team platform integrations, makeup class tracking, and custom-coded portals or web applications.
+
+Important Details:
+- Phase 1: Core Registration & Payment (MVP) will take 15 hours and will include setting up the pipeline, custom fields, tags, data model, group calendars, registration form, payment flow configuration, core booking workflow, and roster views.
+- Phase 2: Session Management & Communications will take 10 hours and will include repeatable session setup, reminders, bulk messaging, and basic reporting.
+- The client must provide all required assets before work begins, including finalized 6-week session pricing, approved liability waiver text, photo/media consent text, class capacity limits, and weekend schedule details.
+- The project assumes a single round of revisions per phase and that the existing website will remain the marketing front-end.
+
+Conclusions:
+- None stated in the document.
