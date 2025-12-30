@@ -18,19 +18,11 @@
       "model_type": "openrouter"
     },
     {
-      "model_name": "gpt-4o-mini",
-      "model_type": "openrouter"
-    },
-    {
       "model_name": "gemini-2.5-pro",
       "model_type": "openrouter"
     },
     {
-      "model_name": "llama4-maverick",
-      "model_type": "openrouter"
-    },
-    {
-      "model_name": "llama4-scout",
+      "model_name": "llama-3.2-3b-instruct",
       "model_type": "openrouter"
     }
   ]

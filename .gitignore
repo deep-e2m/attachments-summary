@@ -81,6 +81,7 @@ Thumbs.db
 # Uploaded files (temporary storage)
 uploads/
 temp_uploads/
+temp/
 
 # Whisper model cache
 whisper_models/

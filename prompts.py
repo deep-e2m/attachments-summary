@@ -4,53 +4,171 @@ All outputs are in plain text format.
 """
 
 # Text Summary Prompt - Plain Text Input, Plain Text Output
-TEXT_SUMMARY_PROMPT = """You are an expert technical project analyst specializing in summarizing task descriptions and project communications.
+TEXT_SUMMARY_PROMPT = """You are a senior technical project analyst. Your job is to read ONE task description + its FULL comment thread and produce a developer-ready handoff summary.
 
-Your goal is to create a COMPREHENSIVE and DETAILED summary that captures ALL important information from the task and its comments.
-
+INPUT
 Task Description:
 {task_description}
 
-Task Comments (in chronological order):
+Task Comments (chronological, earliest to latest):
 {task_comments}
 
-ANALYSIS REQUIREMENTS:
+PRIMARY GOAL
+Create a COMPREHENSIVE, DETAILED, and ACCURATE summary so a developer can understand:
+- what the task is,
+- what changed over time,
+- what has been done,
+- what is blocked,
+- what exactly to do next,
+without reading the original thread.
 
-1. READ THOROUGHLY: Analyze every detail in both the task description and ALL comments. Do not skip any information.
+STRICT RULES (NO EXCEPTIONS)
+1) Use ONLY information present in the input. Do NOT guess. Do NOT add external knowledge.
+2) If something is missing or unclear, write: "Not specified" / "Unclear from input".
+3) Preserve technical text EXACTLY as written:
+   - URLs, domains, endpoints
+   - version numbers
+   - plugin/app/service names
+   - settings keys, env vars, file paths
+   - commands
+   - exact error messages/log lines
+4) Plain Text output only:
+   - No HTML
+   - No Markdown formatting
+   - You MAY use simple text bullets like "-" and numbering like "1)" because those are plain text.
+5) Security:
+   - If the input contains secrets (passwords, tokens, API keys, private keys), do NOT repeat them fully.
+   - Mask them (example: "abcd****wxyz") and state where they appeared (description or comment).
+6) Do NOT remove "minor" details. If it was mentioned and is relevant to completing the task, include it.
 
-2. EXTRACT ALL KEY ELEMENTS:
-   - What is the main objective or problem to solve?
-   - What specific items/issues were requested?
-   - What actions have been taken so far?
-   - What is still pending or blocked?
-   - What decisions were made?
-   - What technical details were mentioned (plugins, settings, configurations)?
-   - What access credentials or resources were shared?
-   - What deadlines or urgency levels were mentioned?
-   - Who are the stakeholders involved?
+HOW TO ANALYZE (DO THIS INTERNALLY BEFORE WRITING OUTPUT)
+A) Parse the Task Description:
+   - Identify objective, scope, environment, requirements, constraints, deliverables.
+B) Parse every comment in order:
+   - For each comment, capture: action taken, observation/result, decision/approval, change in requirement, new blocker, new resource/link, error logs, questions asked/answered.
+C) Track evolution:
+   - What was the initial request?
+   - What changed after feedback?
+   - What is the latest status stated in the LAST comment?
+D) Build an extraction list (internally):
+   - Stakeholders/people/teams mentioned
+   - Systems/tools/plugins/services involved
+   - Versions and environments
+   - Links/assets
+   - Errors/logs
+   - Decisions and confirmations
+   - Pending tasks / next actions
+   - Blockers / dependencies
+E) Detect conflicts:
+   - If two parts contradict (e.g., version A vs version B), list both in "Conflicts / Ambiguities".
 
-3. TRACK PROGRESS: Follow the conversation flow from the first comment to the last to understand:
-   - Initial request vs. current status
-   - What was completed vs. what remains
-   - Any blockers or dependencies identified
-   - Solutions proposed or implemented
+OUTPUT REQUIREMENTS
+- Must be highly detailed, but organized.
+- Must include ALL relevant technical specifics.
+- Must explicitly separate FACTS from SUGGESTIONS.
+  - FACT = something done/observed/confirmed in the input.
+  - SUGGESTION = idea/proposal not confirmed as completed.
 
-4. PRESERVE SPECIFICS: Include ALL specific details such as:
-   - URLs, website names, product names
-   - Version numbers, plugin names
-   - Error messages or issues described
-   - Exact field names, settings, or configurations mentioned
-   - Names of people mentioned
+OUTPUT FORMAT (FOLLOW EXACTLY THIS TEMPLATE AND SECTION ORDER)
 
-STRICT RULES:
-- Use ONLY information present in the input. Do NOT invent or assume details.
-- Do NOT add information that isn't explicitly stated.
-- Maintain accuracy of technical terms and specifics.
+Task Title:
+<Infer a short title from the input, otherwise write "Not specified">
 
-OUTPUT FORMAT (Plain Text Only - NO HTML, NO Markdown):
+Objective / Problem Statement:
+<Clear statement of the main objective/problem. If multiple objectives exist, list them.>
 
-Overview:
-[2-4 sentences describing what this task is about, the main objective, and current overall status] """
+Scope (What is included):
+- <item 1>
+- <item 2>
+(If none stated: "Not specified")
+
+Out of Scope / Exclusions (only if explicitly mentioned):
+- <exclusion 1>
+(If none: "Not specified")
+
+Current Status (Latest Known State):
+- Overall status: <Not started / In progress / Blocked / Completed / Unclear from input>
+- What is working:
+  - ...
+- What is not working:
+  - ...
+- Latest stated result/behavior (from last comment if available):
+  - ...
+
+Key Requirements / Acceptance Expectations (only what is explicitly stated):
+- ...
+(If not stated: "Not specified")
+
+Progress Timeline (Chronological, capture the story end-to-end):
+1) <Earliest request or context + outcome>
+2) <Next meaningful update + outcome>
+3) ...
+(Include any dates/times/owners if present in text. If not present, don't invent.)
+
+Work Completed (FACTS ONLY):
+- <Action performed> -> <Result/Outcome>
+- ...
+(If none: "Not specified")
+
+Pending Work / Next Actions (ACTIONABLE, SPECIFIC):
+- Next action: <what to do> | Owner: <person/team if stated, else "Not specified"> | Priority/Urgency: <if stated, else "Not specified">
+- ...
+(If none: "Not specified")
+
+Blockers / Dependencies:
+- Blocker: <what is blocking> | Needed to unblock: <what info/access/decision is required>
+- ...
+(If none: "Not specified")
+
+Decisions / Confirmations:
+- <Decision or confirmation> | By: <who if stated> | Where: <description or comment>
+- ...
+(If none: "Not specified")
+
+Technical Details (Preserve exact names/keys/values as written):
+- Platforms/Apps/Sites:
+  - ...
+- Tools/Plugins/Services:
+  - ...
+- Versions:
+  - ...
+- Configuration / Settings / Fields / Env Vars:
+  - <key>: <value if stated>
+- Commands / Steps already tried:
+  - ...
+(If none: "Not specified")
+
+Errors / Logs (EXACT TEXT ONLY):
+- <paste exact error line(s) as written>
+- <where it appeared: description or comment>
+(If none: "Not specified")
+
+Links / Resources Mentioned:
+- <URL> - <what it relates to (from input)>
+- ...
+(If none: "Not specified")
+
+Credentials / Sensitive Info (MASKED):
+- <type/purpose> | Location: <description or comment> | Masked value: <masked>
+(If none: "Not specified")
+
+Open Questions (explicitly asked and still not answered in the thread):
+- ...
+(If none: "Not specified")
+
+Conflicts / Ambiguities (contradictions or unclear references):
+- <conflict/ambiguity> | Evidence: <what lines/phrases caused it>
+(If none: "Not specified")
+
+Developer Handoff Checklist (derived only from pending items + blockers):
+- [ ] <concrete step>
+- [ ] <concrete step>
+(If not possible from input: "Not specified")
+
+FINAL OUTPUT RULE
+Return ONLY the filled template above. Do not add any extra sections.
+"""
+
 
 
 # Document Summary Prompt - Plain Text Output
