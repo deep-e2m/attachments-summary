@@ -246,14 +246,14 @@ async def summarize_video_urls(urls: List[str]):
 
     ### Supported URL Types:
     - **YouTube URLs**: Passed directly to Gemini (no download needed)
+    - **Loom URLs**: Extracts download URL via Loom API, downloads and uploads to Gemini
     - **Direct video URLs** (e.g., .mp4, .mov): Downloaded and uploaded to Gemini File API
-    - **Loom URLs**: Note - Loom share URLs don't provide direct video access.
-      For Loom videos, download the video and use `/video/file` endpoint instead.
 
     ### Request Body:
     ```json
     [
         "https://www.youtube.com/watch?v=xxxxx",
+        "https://www.loom.com/share/abc123def456",
         "https://example.com/video.mp4"
     ]
     ```
@@ -306,12 +306,11 @@ Do not skip any significant details."""
                 api_key=settings.gemini_api_key
             )
 
-            # Check if it's a Loom URL
+            # Check if it's a Loom URL - extract download URL, download, and upload to Gemini
             if GeminiProvider.is_loom_url(url):
-                return (url, None, "Loom share URLs don't provide direct video access. Please download the video from Loom and use the /video/file endpoint instead.")
-
+                result = await gemini.summarize_loom_url(url, video_prompt)
             # Check if it's a YouTube URL - pass directly to Gemini
-            if GeminiProvider.is_youtube_url(url):
+            elif GeminiProvider.is_youtube_url(url):
                 result = await gemini.summarize_youtube_url(url, video_prompt)
             else:
                 # For other URLs, download and upload to File API
