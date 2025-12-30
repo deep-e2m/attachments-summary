@@ -102,3 +102,7 @@ whisper_models/
 
 #videos
 videos/
+
+
+# temp files
+temp/
