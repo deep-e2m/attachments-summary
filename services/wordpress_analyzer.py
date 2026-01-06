@@ -7,16 +7,12 @@ import httpx
 from bs4 import BeautifulSoup
 from typing import Optional, List, Dict, Any, Tuple
 from urllib.parse import urljoin, urlparse
-import time
 
 from schemas import (
     WordPressSiteInfo,
     WordPressVersion,
-    PHPVersion,
     ThemeInfo,
     PluginInfo,
-    ServerInfo,
-    SecurityInfo,
     SiteMetadata
 )
 from config import get_settings
@@ -52,8 +48,6 @@ class WordPressAnalyzer:
         Returns:
             WordPressSiteInfo object with all detected information
         """
-        start_time = time.time()
-
         # Normalize URL
         if not url.startswith(('http://', 'https://')):
             url = f'https://{url}'
@@ -76,22 +70,17 @@ class WordPressAnalyzer:
             result.is_wordpress = is_wp
 
             if not is_wp:
-                result.scan_duration_ms = int((time.time() - start_time) * 1000)
                 return result
 
             # Extract information
             result.wordpress_version = await self._detect_wordpress_version(url, html_content, soup)
             result.theme = await self._detect_theme(url, html_content, soup)
             result.plugins = await self._detect_plugins(url, html_content, soup, deep_scan)
-            result.server_info = await self._detect_server_info(response.headers)
-            result.security_info = await self._check_security(url)
             result.metadata = self._extract_metadata(soup)
 
-            result.scan_duration_ms = int((time.time() - start_time) * 1000)
             return result
 
         except Exception as e:
-            result.scan_duration_ms = int((time.time() - start_time) * 1000)
             raise Exception(f"Failed to analyze site: {str(e)}")
 
     async def _is_wordpress(self, url: str, html: str, soup: BeautifulSoup) -> bool:
@@ -251,103 +240,179 @@ class WordPressAnalyzer:
         soup: BeautifulSoup,
         deep_scan: bool = False
     ) -> List[PluginInfo]:
-        """Detect active WordPress plugins."""
+        """Detect active WordPress plugins using multiple methods."""
         plugins = []
         detected_slugs = set()
 
-        # Look for plugin assets in HTML
-        plugin_pattern = re.compile(r'/wp-content/plugins/([^/]+)/')
+        # Method 1: Look for plugin paths in HTML source (CSS, JS, images, etc.)
+        # This regex catches plugins in URLs like: /wp-content/plugins/plugin-name/
+        plugin_pattern = re.compile(r'/wp-content/plugins/([^/\'"?\s]+)', re.IGNORECASE)
         matches = plugin_pattern.findall(html)
+        for slug in matches:
+            if slug and slug not in detected_slugs:
+                detected_slugs.add(slug)
 
-        for plugin_slug in matches:
-            if plugin_slug not in detected_slugs:
-                detected_slugs.add(plugin_slug)
+        # Method 2: Check link tags (CSS files)
+        for link in soup.find_all('link', href=True):
+            href = link.get('href', '')
+            match = re.search(r'/wp-content/plugins/([^/]+)/', href)
+            if match:
+                slug = match.group(1)
+                if slug not in detected_slugs:
+                    detected_slugs.add(slug)
 
-                plugin_info = PluginInfo(
-                    slug=plugin_slug,
-                    name=plugin_slug.replace('-', ' ').title(),
-                    detected_from="html_source"
-                )
+        # Method 3: Check script tags (JavaScript files)
+        for script in soup.find_all('script', src=True):
+            src = script.get('src', '')
+            match = re.search(r'/wp-content/plugins/([^/]+)/', src)
+            if match:
+                slug = match.group(1)
+                if slug not in detected_slugs:
+                    detected_slugs.add(slug)
 
-                # Try to get version from readme.txt
-                if deep_scan:
+        # Method 4: Check for plugin-specific HTML comments
+        # Many plugins leave comments like: <!-- Plugin Name -->
+        comments = soup.find_all(string=lambda text: isinstance(text, str) and '<!--' in str(text))
+        for comment in comments:
+            comment_text = str(comment).lower()
+            # Look for plugin identifiers in comments
+            if 'plugin' in comment_text or 'wp-' in comment_text:
+                # Try to extract plugin slug from comment
+                match = re.search(r'(?:plugin[:\s]+|wp-)([a-z0-9-]+)', comment_text)
+                if match:
+                    potential_slug = match.group(1)
+                    if len(potential_slug) > 3 and potential_slug not in detected_slugs:
+                        # Verify it's a real plugin by checking if path exists
+                        if deep_scan:
+                            plugin_path = urljoin(url, f'/wp-content/plugins/{potential_slug}/')
+                            try:
+                                response = await self.client.head(plugin_path, timeout=5)
+                                if response.status_code in [200, 403]:
+                                    detected_slugs.add(potential_slug)
+                            except:
+                                pass
+
+        # Method 5: Check for plugin-specific meta tags
+        for meta in soup.find_all('meta'):
+            content = meta.get('content', '') + meta.get('name', '')
+            match = re.search(r'/wp-content/plugins/([^/]+)/', content)
+            if match:
+                slug = match.group(1)
+                if slug not in detected_slugs:
+                    detected_slugs.add(slug)
+
+        # Method 6: Look for plugin-specific CSS classes and IDs
+        # Many plugins add unique classes/IDs to elements
+        plugin_indicators = {
+            'yoast': 'wordpress-seo',
+            'woocommerce': 'woocommerce',
+            'elementor': 'elementor',
+            'wpforms': 'wpforms',
+            'wp-rocket': 'wp-rocket',
+            'jetpack': 'jetpack',
+            'akismet': 'akismet',
+            'wordfence': 'wordfence',
+            'contact-form-7': 'contact-form-7',
+            'wp-super-cache': 'wp-super-cache',
+            'all-in-one-seo': 'all-in-one-seo-pack',
+            'rankmath': 'seo-by-rank-math',
+            'wp-optimize': 'wp-optimize',
+            'smush': 'wp-smushit',
+            'updraft': 'updraftplus',
+        }
+
+        html_lower = html.lower()
+        for indicator, slug in plugin_indicators.items():
+            if indicator in html_lower and slug not in detected_slugs:
+                detected_slugs.add(slug)
+
+        # Method 7: Check inline scripts for plugin identifiers
+        for script in soup.find_all('script', src=False):
+            script_text = script.string if script.string else ''
+            if script_text:
+                # Look for plugin slugs in inline JavaScript
+                match = re.search(r'/wp-content/plugins/([^/\'"]+)', script_text)
+                if match:
+                    slug = match.group(1)
+                    if slug not in detected_slugs:
+                        detected_slugs.add(slug)
+
+        # Method 8: Check for plugin-specific generator tags
+        for meta in soup.find_all('meta', attrs={'name': 'generator'}):
+            content = meta.get('content', '').lower()
+            # Some plugins add their own generator tags
+            if 'plugin' in content or any(ind in content for ind in plugin_indicators.keys()):
+                for indicator, slug in plugin_indicators.items():
+                    if indicator in content and slug not in detected_slugs:
+                        detected_slugs.add(slug)
+
+        # Method 9: Deep scan - check common plugin directories
+        if deep_scan:
+            # List of popular WordPress plugins to check
+            common_plugins = [
+                'wordpress-seo', 'akismet', 'jetpack', 'contact-form-7',
+                'woocommerce', 'elementor', 'wpforms-lite', 'wordfence',
+                'wp-super-cache', 'classic-editor', 'duplicate-post',
+                'google-analytics-for-wordpress', 'all-in-one-seo-pack',
+                'wp-mail-smtp', 'updraftplus', 'wp-optimize', 'smush',
+                'really-simple-ssl', 'redirection', 'wpforms', 'sucuri-scanner'
+            ]
+
+            for plugin_slug in common_plugins:
+                if plugin_slug not in detected_slugs:
+                    # Check if plugin directory exists
+                    plugin_url = urljoin(url, f'/wp-content/plugins/{plugin_slug}/')
                     try:
-                        readme_url = urljoin(url, f'/wp-content/plugins/{plugin_slug}/readme.txt')
-                        response = await self.client.get(readme_url)
-                        if response.status_code == 200:
-                            content = response.text[:1000]
-                            version_match = re.search(r'Stable tag:\s*([\d.]+)', content, re.IGNORECASE)
-                            if version_match:
-                                plugin_info.version = version_match.group(1).strip()
+                        response = await self.client.head(plugin_url, timeout=5)
+                        if response.status_code in [200, 403]:
+                            detected_slugs.add(plugin_slug)
                     except:
                         pass
 
-                plugins.append(plugin_info)
+        # Now create PluginInfo objects for all detected plugins
+        for plugin_slug in detected_slugs:
+            # Skip invalid slugs
+            if not plugin_slug or len(plugin_slug) < 2 or not re.match(r'^[a-z0-9\-_]+$', plugin_slug, re.IGNORECASE):
+                continue
+
+            plugin_info = PluginInfo(
+                name=plugin_slug.replace('-', ' ').replace('_', ' ').title()
+            )
+
+            # Try to get version and description from readme.txt
+            try:
+                readme_url = urljoin(url, f'/wp-content/plugins/{plugin_slug}/readme.txt')
+                response = await self.client.get(readme_url, timeout=5)
+                if response.status_code == 200:
+                    content = response.text[:3000]  # Read more to get description
+
+                    # Extract version
+                    version_match = re.search(r'Stable tag:\s*([\d.]+)', content, re.IGNORECASE)
+                    if version_match:
+                        plugin_info.version = version_match.group(1).strip()
+
+                    # Extract description (usually in the header or after === Description ===)
+                    desc_patterns = [
+                        r'(?:===\s*Description\s*===\s*)(.*?)(?=\n===|\Z)',  # After === Description ===
+                        r'(?:Description:\s*)(.*?)(?=\n[A-Z][a-z]+:|\n===|\Z)',  # Description: field in header
+                        r'(?:^|\n)(.*?)(?:\n===|\Z)'  # First paragraph after header
+                    ]
+
+                    for pattern in desc_patterns:
+                        desc_match = re.search(pattern, content, re.IGNORECASE | re.DOTALL)
+                        if desc_match:
+                            description = desc_match.group(1).strip()
+                            # Clean up the description
+                            description = ' '.join(description.split())  # Remove extra whitespace
+                            if len(description) > 10:  # Only if we got meaningful text
+                                plugin_info.description = description[:200]  # Limit to 200 chars
+                                break
+            except:
+                pass
+
+            plugins.append(plugin_info)
 
         return plugins
-
-    async def _detect_server_info(self, headers: Dict[str, str]) -> ServerInfo:
-        """Extract server information from HTTP headers."""
-        server_info = ServerInfo()
-
-        # Server header
-        server_info.server = headers.get('server', headers.get('Server'))
-
-        # X-Powered-By header
-        powered_by = headers.get('x-powered-by', headers.get('X-Powered-By'))
-        if powered_by:
-            server_info.powered_by = powered_by
-
-            # Try to extract PHP version
-            php_match = re.search(r'PHP/([\d.]+)', powered_by)
-            if php_match:
-                server_info.php_version = PHPVersion(
-                    version=php_match.group(1),
-                    detected_from="x_powered_by_header"
-                )
-
-        return server_info
-
-    async def _check_security(self, url: str) -> SecurityInfo:
-        """Check various security-related configurations."""
-        security = SecurityInfo()
-
-        # Check XML-RPC
-        try:
-            xmlrpc_url = urljoin(url, '/xmlrpc.php')
-            response = await self.client.post(xmlrpc_url, content="")
-            security.xmlrpc_enabled = response.status_code in [200, 405]
-        except:
-            pass
-
-        # Check REST API
-        try:
-            rest_url = urljoin(url, '/wp-json/')
-            response = await self.client.get(rest_url)
-            security.rest_api_enabled = response.status_code == 200
-            security.wp_json_exposed = response.status_code == 200
-        except:
-            pass
-
-        # Check readme.html accessibility
-        try:
-            readme_url = urljoin(url, '/readme.html')
-            response = await self.client.get(readme_url)
-            security.readme_accessible = response.status_code == 200
-        except:
-            pass
-
-        # Check directory listing on wp-content
-        try:
-            wp_content_url = urljoin(url, '/wp-content/')
-            response = await self.client.get(wp_content_url)
-            # If we see "Index of" in response, directory listing is enabled
-            if response.status_code == 200 and 'index of' in response.text.lower():
-                security.directory_listing = True
-        except:
-            pass
-
-        return security
 
     def _extract_metadata(self, soup: BeautifulSoup) -> SiteMetadata:
         """Extract general site metadata."""

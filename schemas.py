@@ -31,9 +31,8 @@ class ThemeInfo(BaseModel):
 class PluginInfo(BaseModel):
     """WordPress plugin information."""
     name: Optional[str] = Field(None, description="Plugin name")
-    slug: Optional[str] = Field(None, description="Plugin slug")
     version: Optional[str] = Field(None, description="Plugin version")
-    detected_from: Optional[str] = Field(None, description="Source of detection (js, css, html)")
+    description: Optional[str] = Field(None, description="Plugin description")
 
 
 class ServerInfo(BaseModel):
@@ -68,17 +67,12 @@ class WordPressSiteInfo(BaseModel):
     wordpress_version: Optional[WordPressVersion] = Field(None, description="WordPress version information")
     theme: Optional[ThemeInfo] = Field(None, description="Active theme information")
     plugins: List[PluginInfo] = Field(default_factory=list, description="Detected plugins")
-    server_info: Optional[ServerInfo] = Field(None, description="Server information")
-    security_info: Optional[SecurityInfo] = Field(None, description="Security-related information")
     metadata: Optional[SiteMetadata] = Field(None, description="General site metadata")
-    scan_timestamp: datetime = Field(default_factory=datetime.utcnow, description="When the scan was performed")
-    scan_duration_ms: Optional[int] = Field(None, description="Scan duration in milliseconds")
 
 
 class AnalyzeRequest(BaseModel):
     """Request model for analyzing a WordPress site."""
     url: HttpUrl = Field(..., description="The WordPress site URL to analyze")
-    deep_scan: bool = Field(default=False, description="Whether to perform a deep scan (slower but more thorough)")
 
 
 class AnalyzeResponse(BaseModel):
