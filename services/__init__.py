@@ -1,5 +1,3 @@
-from .document_processor import DocumentProcessor
-from .video_processor import VideoProcessor
-from .summary_service import SummaryService
+from .wordpress_analyzer import WordPressAnalyzer
 
-__all__ = ["DocumentProcessor", "VideoProcessor", "SummaryService"]
+__all__ = ["WordPressAnalyzer"]

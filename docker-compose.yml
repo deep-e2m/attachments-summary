@@ -1,33 +1,30 @@
 services:
-  summary-api:
+  wordpress-analyzer:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: summary-api
+    container_name: wordpress-analyzer-api
     ports:
       - "8001:8000"  # Using 8001 to avoid conflicts with other apps
     env_file:
       - .env
     environment:
-      # Default model settings
-      - DEFAULT_MODEL_TYPE=ollama
-      - DEFAULT_MODEL_NAME=llama3.1
-
-      # Ollama settings (connect to host Ollama)
-      - OLLAMA_HOST=http://host.docker.internal:11434
-      - OLLAMA_MODEL=llama3.1
-
-      # Gemini and OpenAI API keys are loaded from .env file
-
-      # File processing
-      - MAX_FILE_SIZE_MB=50
-      - WHISPER_MODEL=base
-
-      # Debug
+      # API Settings
+      - APP_NAME=WordPress Analyzer API
       - DEBUG=false
-    volumes:
-      # Mount temp directory for file processing
-      - ./temp:/tmp/summary_api
+
+      # HTTP Client Settings
+      - REQUEST_TIMEOUT=30
+      - MAX_RETRIES=3
+      - USER_AGENT=Mozilla/5.0 (compatible; WordPress-Analyzer/1.0)
+
+      # WordPress Detection Settings
+      - ENABLE_PLUGIN_DETECTION=true
+      - ENABLE_THEME_DETECTION=true
+      - ENABLE_VERSION_DETECTION=true
+
+      # Rate Limiting
+      - RATE_LIMIT_REQUESTS=10
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
@@ -35,10 +32,10 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+    # Security: read-only root filesystem (optional)
+    # read_only: true
 
 # Optional: Add network if you want to connect with other containers
 networks:
   default:
-    name: summary-api-network
+    name: wordpress-analyzer-network

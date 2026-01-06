@@ -1,8 +1,8 @@
 # Deployment Handoff Document
 
-**Application:** Attachment & Video Summary API
-**Date:** December 2024
-**Developer Contact:** [Your Name]
+**Application:** WordPress Analyzer API
+**Date:** January 2026
+**Purpose:** Analyze WordPress sites without authentication
 
 ---
 
@@ -15,6 +15,8 @@
 | **Health Check** | `GET /health` |
 | **Docker Ready** | Yes |
 | **Python Version** | 3.11+ |
+| **Authentication Required** | No |
+| **External Dependencies** | None (only makes HTTP requests) |
 
 ---
 
@@ -34,47 +36,63 @@
 
 ### Build Image
 ```bash
-docker build -t summary-api:latest .
+docker build -t wordpress-analyzer-api:latest .
 ```
 
 ### Run Container
 ```bash
 docker run -d \
-  --name summary-api \
+  --name wordpress-analyzer \
   -p 8000:8000 \
-  -e OPENROUTER_API_KEY=your_key_here \
-  summary-api:latest
+  wordpress-analyzer-api:latest
 ```
 
-### Using Docker Compose
+### Using Docker Compose (Recommended)
 ```bash
 docker-compose up -d --build
 ```
 
+**Access the API:**
+- API: `http://localhost:8001`
+- Docs: `http://localhost:8001/docs`
+- Health: `http://localhost:8001/health`
+
 ---
 
-## Environment Variables (REQUIRED)
+## Environment Variables (Optional)
 
-| Variable | Required | Description | Example |
-|----------|----------|-------------|---------|
-| `OPENROUTER_API_KEY` | **YES** | OpenRouter API key | `sk-or-...` |
-| `DEFAULT_MODEL_TYPE` | No | Default: `openrouter` | `openrouter` |
-| `OPENROUTER_DEFAULT_MODEL` | No | Default: `gpt-4o-mini` | `gpt-4o-mini` |
-| `MAX_FILE_SIZE_MB` | No | Default: `50` | `50` |
-| `WHISPER_MODEL` | No | Default: `base` | `base` |
-| `DEBUG` | No | Default: `false` | `false` |
+All environment variables have defaults. You can override them as needed.
 
-### Production .env File
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `APP_NAME` | No | `WordPress Analyzer API` | Application name |
+| `DEBUG` | No | `false` | Enable debug mode |
+| `REQUEST_TIMEOUT` | No | `30` | HTTP request timeout (seconds) |
+| `MAX_RETRIES` | No | `3` | Max HTTP retries |
+| `USER_AGENT` | No | `Mozilla/5.0...` | User agent for requests |
+| `ENABLE_PLUGIN_DETECTION` | No | `true` | Enable plugin detection |
+| `ENABLE_THEME_DETECTION` | No | `true` | Enable theme detection |
+| `ENABLE_VERSION_DETECTION` | No | `true` | Enable version detection |
+| `RATE_LIMIT_REQUESTS` | No | `10` | Requests per minute per IP |
+
+### Production .env File (Optional)
 ```env
-# REQUIRED
-OPENROUTER_API_KEY=your_openrouter_api_key_here
-
-# OPTIONAL
-DEFAULT_MODEL_TYPE=openrouter
-OPENROUTER_DEFAULT_MODEL=gpt-4o-mini
-MAX_FILE_SIZE_MB=50
-WHISPER_MODEL=base
+# API Settings
+APP_NAME="WordPress Analyzer API"
 DEBUG=false
+
+# HTTP Client Settings
+REQUEST_TIMEOUT=30
+MAX_RETRIES=3
+USER_AGENT="Mozilla/5.0 (compatible; WordPress-Analyzer/1.0)"
+
+# WordPress Detection Settings
+ENABLE_PLUGIN_DETECTION=true
+ENABLE_THEME_DETECTION=true
+ENABLE_VERSION_DETECTION=true
+
+# Rate Limiting
+RATE_LIMIT_REQUESTS=10
 ```
 
 ---
@@ -90,13 +108,19 @@ DEBUG=false
 External (443/HTTPS) → Nginx/Load Balancer → Container (8000)
 ```
 
+**Docker Compose Port Mapping:**
+```yaml
+ports:
+  - "8001:8000"  # Host port 8001 → Container port 8000
+```
+
 ---
 
 ## Health Check
 
 | Endpoint | Method | Expected Response |
 |----------|--------|-------------------|
-| `/health` | GET | `{"status": "healthy", "version": "2.1.0"}` |
+| `/health` | GET | `{"status": "healthy", "version": "1.0.0"}` |
 
 **Docker Health Check (already configured in Dockerfile):**
 ```dockerfile
@@ -111,28 +135,47 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/health` | GET | Health check |
-| `/api/v1/models` | GET | List available models |
-| `/api/v1/summarize/attachment` | POST | Document summarization (PDF, DOCX, TXT) |
-| `/api/v1/summarize/video` | POST | Video transcription & summarization |
+| `/api/v1/wordpress/analyze` | POST | Analyze WordPress site (JSON body) |
+| `/api/v1/wordpress/analyze/{url}` | GET | Analyze WordPress site (URL param) |
 | `/docs` | GET | Swagger API documentation |
+
+### Example API Calls
+
+**POST Method:**
+```bash
+curl -X POST "https://api.yourdomain.com/api/v1/wordpress/analyze" \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://example.com", "deep_scan": false}'
+```
+
+**GET Method:**
+```bash
+curl "https://api.yourdomain.com/api/v1/wordpress/analyze/example.com"
+```
 
 ---
 
 ## Resource Requirements
 
-### Minimum (Document only)
+### Minimum (Production)
+| Resource | Value |
+|----------|-------|
+| CPU | 0.5 vCPU |
+| RAM | 512 MB |
+| Storage | 2 GB |
+
+### Recommended (Production with Traffic)
 | Resource | Value |
 |----------|-------|
 | CPU | 1 vCPU |
 | RAM | 1 GB |
 | Storage | 5 GB |
 
-### Recommended (With Video Processing)
-| Resource | Value |
-|----------|-------|
-| CPU | 2 vCPU |
-| RAM | 4 GB |
-| Storage | 20 GB |
+**Notes:**
+- Very lightweight application
+- No database required
+- No file storage needed
+- Scales horizontally easily
 
 ---
 
@@ -140,10 +183,10 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 
 | Service | Required | Purpose | Notes |
 |---------|----------|---------|-------|
-| **OpenRouter API** | YES | LLM for summaries | Requires API key |
-| **Ollama** | NO | Local LLM (dev only) | Not for production |
+| **Target WordPress Sites** | YES | Sites to analyze | Must be publicly accessible |
+| **Internet Access** | YES | HTTP/HTTPS requests | Outbound 80/443 required |
 
-**IMPORTANT:** This application calls external APIs (OpenRouter). Ensure outbound HTTPS (443) is allowed.
+**IMPORTANT:** This application makes outbound HTTP/HTTPS requests to analyze WordPress sites. Ensure outbound traffic on ports 80 and 443 is allowed.
 
 ---
 
@@ -152,25 +195,31 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 ### Inbound
 | Port | Protocol | Source | Purpose |
 |------|----------|--------|---------|
-| 8000 | TCP | Load Balancer / Internal | Application |
+| 8000 | TCP | Load Balancer / Internal | Application API |
 
 ### Outbound
 | Port | Protocol | Destination | Purpose |
 |------|----------|-------------|---------|
-| 443 | TCP | openrouter.ai | OpenRouter API |
+| 80 | TCP | Internet | HTTP requests to WordPress sites |
+| 443 | TCP | Internet | HTTPS requests to WordPress sites |
 
 ---
 
-## Nginx Configuration (if needed)
+## Nginx Configuration (Reverse Proxy)
 
 ```nginx
 server {
     listen 80;
-    listen 443 ssl;
+    listen 443 ssl http2;
     server_name api.yourdomain.com;
 
     ssl_certificate /path/to/cert.pem;
     ssl_certificate_key /path/to/key.pem;
+
+    # Redirect HTTP to HTTPS
+    if ($scheme = http) {
+        return 301 https://$server_name$request_uri;
+    }
 
     location / {
         proxy_pass http://localhost:8000;
@@ -183,54 +232,61 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_cache_bypass $http_upgrade;
 
-        # Timeout settings for large file uploads
-        proxy_connect_timeout 300;
-        proxy_send_timeout 300;
-        proxy_read_timeout 300;
+        # Timeout settings for site analysis
+        proxy_connect_timeout 60;
+        proxy_send_timeout 60;
+        proxy_read_timeout 60;
 
-        # Max upload size
-        client_max_body_size 50M;
+        # CORS headers (if needed)
+        add_header 'Access-Control-Allow-Origin' '*' always;
+        add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS' always;
+        add_header 'Access-Control-Allow-Headers' 'Content-Type' always;
     }
+
+    # Rate limiting (optional)
+    limit_req_zone $binary_remote_addr zone=api_limit:10m rate=10r/m;
+    limit_req zone=api_limit burst=20 nodelay;
 }
 ```
 
 ---
 
-## Kubernetes Deployment (if applicable)
+## Kubernetes Deployment (Optional)
 
 ```yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: summary-api
+  name: wordpress-analyzer
+  labels:
+    app: wordpress-analyzer
 spec:
-  replicas: 2
+  replicas: 3
   selector:
     matchLabels:
-      app: summary-api
+      app: wordpress-analyzer
   template:
     metadata:
       labels:
-        app: summary-api
+        app: wordpress-analyzer
     spec:
       containers:
-      - name: summary-api
-        image: summary-api:latest
+      - name: wordpress-analyzer
+        image: wordpress-analyzer-api:latest
         ports:
         - containerPort: 8000
         env:
-        - name: OPENROUTER_API_KEY
-          valueFrom:
-            secretKeyRef:
-              name: api-secrets
-              key: openrouter-api-key
+        - name: DEBUG
+          value: "false"
+        - name: REQUEST_TIMEOUT
+          value: "30"
         resources:
           requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
             memory: "1Gi"
             cpu: "500m"
-          limits:
-            memory: "4Gi"
-            cpu: "2000m"
         livenessProbe:
           httpGet:
             path: /health
@@ -247,14 +303,38 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: summary-api-service
+  name: wordpress-analyzer-service
 spec:
   selector:
-    app: summary-api
+    app: wordpress-analyzer
   ports:
   - port: 80
     targetPort: 8000
   type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: wordpress-analyzer-ingress
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/rate-limit: "10"
+spec:
+  tls:
+  - hosts:
+    - api.yourdomain.com
+    secretName: wordpress-analyzer-tls
+  rules:
+  - host: api.yourdomain.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: wordpress-analyzer-service
+            port:
+              number: 80
 ```
 
 ---
@@ -262,8 +342,55 @@ spec:
 ## Logging
 
 Application logs to stdout/stderr. Recommended log collection:
-- Docker: Use `docker logs` or log driver
-- Kubernetes: Use centralized logging (ELK, Loki)
+
+**Docker:**
+```bash
+# View logs
+docker logs wordpress-analyzer
+
+# Follow logs
+docker logs -f wordpress-analyzer
+
+# Docker Compose
+docker-compose logs -f wordpress-analyzer
+```
+
+**Kubernetes:**
+```bash
+kubectl logs -f deployment/wordpress-analyzer
+```
+
+**Centralized Logging:**
+- ELK Stack (Elasticsearch, Logstash, Kibana)
+- Loki + Grafana
+- CloudWatch (AWS)
+- Stackdriver (GCP)
+
+---
+
+## Monitoring
+
+### Recommended Metrics
+
+| Metric | Description |
+|--------|-------------|
+| Response Time | API endpoint latency |
+| Request Rate | Requests per minute |
+| Error Rate | Failed requests percentage |
+| Health Check | Uptime monitoring |
+| Memory Usage | Container memory |
+| CPU Usage | Container CPU |
+
+### Prometheus Example
+
+```yaml
+# prometheus.yml
+scrape_configs:
+  - job_name: 'wordpress-analyzer'
+    static_configs:
+      - targets: ['localhost:8000']
+    metrics_path: '/metrics'  # If you add Prometheus endpoint
+```
 
 ---
 
@@ -272,7 +399,7 @@ Application logs to stdout/stderr. Recommended log collection:
 ### 1. Health Check
 ```bash
 curl https://api.yourdomain.com/health
-# Expected: {"status": "healthy", "version": "2.1.0"}
+# Expected: {"status": "healthy", "version": "1.0.0"}
 ```
 
 ### 2. API Documentation
@@ -280,16 +407,52 @@ curl https://api.yourdomain.com/health
 Open: https://api.yourdomain.com/docs
 ```
 
-### 3. Test Attachment Summary
+### 3. Test WordPress Site Analysis (POST)
 ```bash
-curl -X POST "https://api.yourdomain.com/api/v1/summarize/attachment" \
-  -F "file=@document.pdf"
+curl -X POST "https://api.yourdomain.com/api/v1/wordpress/analyze" \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://wordpress.org", "deep_scan": false}'
 ```
 
-### 4. Test Video Summary
+**Expected Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "url": "https://wordpress.org/",
+    "is_wordpress": true,
+    "wordpress_version": {
+      "version": "7.0",
+      "detected_from": "meta_generator"
+    },
+    "theme": {
+      "name": "Wporg Parent 2021",
+      "slug": "wporg-parent-2021"
+    },
+    "plugins": [...]
+  }
+}
+```
+
+### 4. Test WordPress Site Analysis (GET)
 ```bash
-curl -X POST "https://api.yourdomain.com/api/v1/summarize/video" \
-  -F "file=@video.mp4"
+curl "https://api.yourdomain.com/api/v1/wordpress/analyze/techcrunch.com"
+```
+
+### 5. Test Non-WordPress Site
+```bash
+curl "https://api.yourdomain.com/api/v1/wordpress/analyze/google.com"
+```
+
+**Expected Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "url": "https://google.com",
+    "is_wordpress": false
+  }
+}
 ```
 
 ---
@@ -298,29 +461,173 @@ curl -X POST "https://api.yourdomain.com/api/v1/summarize/video" \
 
 | Issue | Solution |
 |-------|----------|
-| Container won't start | Check `docker logs summary-api` |
-| 500 errors | Check if OPENROUTER_API_KEY is set |
-| Timeout on video upload | Increase proxy timeout, check MAX_FILE_SIZE_MB |
-| Can't reach OpenRouter API | Check outbound firewall rules |
+| Container won't start | Check `docker logs wordpress-analyzer` |
+| Health check failing | Verify port 8000 is accessible inside container |
+| Timeout errors | Check outbound firewall rules (80/443) |
+| Can't analyze HTTPS sites | Ensure SSL certificates are trusted |
+| High memory usage | Check for memory leaks, restart container |
+| Slow responses | Increase `REQUEST_TIMEOUT`, check target site speed |
+
+### Common Error Messages
+
+**"Request error: Connection refused"**
+- Target WordPress site is down
+- Target site blocked the request
+- Network connectivity issue
+
+**"HTTP error occurred: 403"**
+- Target site blocked the request (WAF, rate limiting)
+- User-Agent blocked
+- IP blocked
+
+**"An error occurred during site analysis"**
+- Check logs: `docker logs wordpress-analyzer`
+- Increase timeout settings
+- Verify target URL is valid
+
+---
+
+## Security Considerations
+
+### Application Security
+- ✅ Runs as non-root user (UID 1000)
+- ✅ No sensitive data stored
+- ✅ No database required
+- ✅ Read-only filesystem possible
+- ✅ Minimal attack surface
+
+### Network Security
+- Use HTTPS (TLS) for external access
+- Rate limiting recommended (prevent abuse)
+- Firewall rules (restrict inbound to load balancer only)
+- Consider IP whitelisting if internal use only
+
+### Data Privacy
+- No personal data collected
+- No data stored persistently
+- Only analyzes public information
+- GDPR compliant (no PII)
+
+---
+
+## Backup & Recovery
+
+**No backup required:**
+- Stateless application
+- No database
+- No file storage
+- Configuration in environment variables
+
+**Disaster Recovery:**
+1. Rebuild container from Docker image
+2. Deploy with same environment variables
+3. Application ready immediately
+
+---
+
+## Scaling
+
+### Horizontal Scaling
+- ✅ Fully stateless - scales easily
+- ✅ No session management
+- ✅ No shared state
+- ✅ Use load balancer for multiple replicas
+
+**Docker Compose Scaling:**
+```bash
+docker-compose up -d --scale wordpress-analyzer=3
+```
+
+**Kubernetes Scaling:**
+```bash
+kubectl scale deployment wordpress-analyzer --replicas=5
+```
+
+### Vertical Scaling
+- Not typically needed
+- Increase CPU/RAM if analyzing many sites concurrently
+
+---
+
+## Performance Optimization
+
+### Caching (Optional)
+Implement Redis caching for frequently analyzed sites:
+
+```python
+# Example: Cache results for 1 hour
+@cache(ttl=3600)
+async def analyze(url: str):
+    # ... analysis logic
+```
+
+### CDN (Optional)
+Place API behind CDN for geographic distribution:
+- Cloudflare
+- AWS CloudFront
+- Fastly
 
 ---
 
 ## Checklist for DevOps
 
 - [ ] Docker image built successfully
-- [ ] Environment variables configured
+- [ ] Environment variables configured (if needed)
 - [ ] Port 8000 exposed internally
 - [ ] Reverse proxy configured (443 → 8000)
 - [ ] SSL certificate installed
-- [ ] Outbound HTTPS allowed (for OpenRouter API)
+- [ ] Outbound HTTP/HTTPS allowed (80, 443)
 - [ ] Health check endpoint responding
 - [ ] Swagger docs accessible at /docs
-- [ ] Test API call successful
+- [ ] Test API call successful (WordPress.org)
+- [ ] Test API call successful (non-WordPress site)
+- [ ] Rate limiting configured (optional)
+- [ ] Monitoring setup (optional)
+- [ ] Logging configured
+- [ ] Horizontal scaling tested (optional)
 
 ---
 
-## Contact
+## Support & Contact
 
 For questions about the application:
-- **Developer:** [Your Name]
-- **Email:** [Your Email]
+- **Documentation:** See `DEVELOPER_GUIDE.md` for technical details
+- **API Docs:** Available at `/docs` endpoint
+- **GitHub Issues:** [Repository URL if applicable]
+
+---
+
+## What Makes This API Different
+
+Unlike WordPress REST API or authenticated APIs:
+
+✅ **No authentication required** - Analyzes public data only
+✅ **Works with any WordPress site** - No plugins needed
+✅ **Fast** - Typically 2-5 seconds per site
+✅ **Ethical** - Only accesses public information
+✅ **Legal** - Similar to browser viewing public pages
+✅ **Privacy-friendly** - No tracking, no data storage
+
+Similar to: Wappalyzer, BuiltWith, HackerTarget, WPScan (passive mode)
+
+---
+
+## License & Legal
+
+This API analyzes only publicly accessible information, similar to viewing a website in a browser. It does not:
+- Attempt to bypass security measures
+- Perform unauthorized access
+- Store or share private information
+- Violate terms of service
+
+**Recommended Use Cases:**
+- Security auditing (authorized)
+- Competitor analysis
+- Site profiling
+- Version tracking
+- Migration planning
+
+**Not Recommended:**
+- Mass scanning without permission
+- Exploiting vulnerabilities
+- Bypassing security measures

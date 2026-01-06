@@ -100,3 +100,19 @@ DOCKER_COMPLETE_GUIDE.md
 
 # videos
 videos/
+
+# developer guide
+DEVELOPER_GUIDE.md
+
+# deployment handoff
+DEPLOYMENT_HANDOFF.md
+
+# summary api postman collection
+Summary_API_Postman_Collection.json
+
+# wordpress analyzer api postman collection
+WordPress_Analyzer_API_Postman_Collection.json
+
+
+
+

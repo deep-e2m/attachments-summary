@@ -1,43 +1,59 @@
 """
-Summary API - FastAPI application for summarizing attachments and videos.
+WordPress Analyzer API - FastAPI application for analyzing WordPress sites.
 
 Endpoints:
-1. POST /api/v1/summarize/attachments - Summarize multiple files (batch)
-2. POST /api/v1/summarize/urls - Summarize documents from URLs (batch)
-3. POST /api/v1/summarize/video - Transcribe and summarize video/audio files
-4. POST /api/v1/extract/attachment - Extract content using open source libraries
-5. POST /api/v1/extract/model - Extract content using AI model directly
+1. POST /api/v1/wordpress/analyze - Analyze a WordPress site and extract information
+2. GET /api/v1/wordpress/analyze/{url} - Analyze a WordPress site (GET method)
+3. GET /health - Health check
 
-Supports OpenRouter API for access to multiple models (GPT-4, Claude, Gemini, Llama, etc.)
+Detects WordPress version, theme, plugins, PHP version, and security configurations
+without requiring authentication.
 """
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from routes import health_router, extract_router, summarize_router, models_router
+from routes import health_router, wordpress_router
+from config import get_settings
 
+
+# Initialize settings
+settings = get_settings()
 
 # Initialize FastAPI app
 app = FastAPI(
-    title="Attachment & Video Summary API",
+    title="WordPress Analyzer API",
     description="""
-## API for summarizing attachments and videos using OpenRouter
+## API for analyzing WordPress sites without authentication
+
+This API analyzes WordPress sites similar to Wappalyzer or HackerTarget,
+detecting site information by analyzing publicly accessible data.
 
 ### Available Endpoints:
 
-**Extract:**
-- **POST /api/v1/extract/attachment** - Extract using PyPDF2/python-docx (open source)
-- **POST /api/v1/extract/model** - Extract using AI model directly (GPT-4o/Gemini)
+**WordPress Analysis:**
+- **POST /api/v1/wordpress/analyze** - Analyze a WordPress site (recommended)
+- **GET /api/v1/wordpress/analyze/{url}** - Analyze a WordPress site via GET
 
-**Summarize:**
-- **POST /api/v1/summarize/attachments** - Summarize multiple files (batch)
-- **POST /api/v1/summarize/urls** - Summarize documents from URLs (batch)
-- **POST /api/v1/summarize/video** - Transcribe and summarize video/audio files
+### What It Detects:
+- ✅ WordPress version
+- ✅ Active theme (name, version, author)
+- ✅ Active plugins (with optional deep scan)
+- ✅ PHP version (if exposed)
+- ✅ Server information
+- ✅ Security configurations (XML-RPC, REST API, etc.)
+- ✅ Site metadata
 
 **Other:**
-- **GET /api/v1/models** - List available models
 - **GET /health** - Health check
+
+### Features:
+- No authentication required
+- Works with any WordPress site
+- Fast analysis (typically < 5 seconds)
+- Optional deep scan for more thorough plugin detection
+- Respects robots.txt and site policies
     """,
-    version="2.3.0",
+    version="1.0.0",
     swagger_ui_parameters={"defaultModelsExpandDepth": -1}
 )
 
@@ -52,9 +68,7 @@ app.add_middleware(
 
 # Include routers
 app.include_router(health_router)
-app.include_router(extract_router)
-app.include_router(summarize_router)
-app.include_router(models_router)
+app.include_router(wordpress_router)
 
 
 if __name__ == "__main__":

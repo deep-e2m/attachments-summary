@@ -1,5 +1,5 @@
 """
-Configuration settings for the Summary API.
+Configuration settings for the WordPress Analyzer API.
 """
 from pydantic_settings import BaseSettings
 from pydantic import Field
@@ -11,35 +11,24 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
     # API Settings
-    app_name: str = "Summary API"
+    app_name: str = "WordPress Analyzer API"
     debug: bool = False
 
-    # Default Model Configuration
-    default_model_type: str = Field(default="openrouter", description="Default model: ollama, gemini, openai, openrouter")
-    default_model_name: str = Field(default="openai/gpt-4o-mini", description="Default model name")
+    # HTTP Client Settings
+    request_timeout: int = Field(default=30, description="HTTP request timeout in seconds")
+    max_retries: int = Field(default=3, description="Maximum number of HTTP retries")
+    user_agent: str = Field(
+        default="Mozilla/5.0 (compatible; WordPress-Analyzer/1.0)",
+        description="User agent for HTTP requests"
+    )
 
-    # OpenRouter Settings (PRIMARY - One API for all models)
-    openrouter_api_key: Optional[str] = Field(default=None, description="OpenRouter API key")
-    openrouter_default_model: str = Field(default="openai/gpt-4o-mini", description="Default OpenRouter model")
+    # WordPress Detection Settings
+    enable_plugin_detection: bool = Field(default=True, description="Enable plugin detection")
+    enable_theme_detection: bool = Field(default=True, description="Enable theme detection")
+    enable_version_detection: bool = Field(default=True, description="Enable WordPress version detection")
 
-    # Ollama Settings (Local - for development)
-    ollama_host: str = Field(default="http://localhost:11434", description="Ollama server host")
-    ollama_model: str = Field(default="llama3.1", description="Ollama model name")
-
-    # Gemini Settings (Legacy - use OpenRouter instead)
-    gemini_api_key: Optional[str] = Field(default=None, description="Google Gemini API key")
-    gemini_model: str = Field(default="gemini-pro", description="Gemini model name")
-
-    # OpenAI Settings (Legacy - use OpenRouter instead)
-    openai_api_key: Optional[str] = Field(default=None, description="OpenAI API key")
-    openai_model: str = Field(default="gpt-4o-mini", description="OpenAI model name")
-
-    # File Processing Settings
-    max_file_size_mb: int = Field(default=50, description="Maximum file size in MB")
-    temp_dir: str = Field(default="/tmp/summary_api", description="Temporary directory for file processing")
-
-    # Whisper Settings (for video transcription)
-    whisper_model: str = Field(default="base", description="Whisper model size: tiny, base, small, medium, large")
+    # Rate Limiting
+    rate_limit_requests: int = Field(default=10, description="Max requests per minute per IP")
 
     class Config:
         env_file = ".env"

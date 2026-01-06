@@ -1,6 +1,6 @@
-# Developer Guide - Attachment & Video Summary API
+# Developer Guide - WordPress Analyzer API
 
-This document explains how the Summary API application works from a developer's perspective.
+This document explains how the WordPress Analyzer API application works from a developer's perspective.
 
 ---
 
@@ -11,6 +11,7 @@ This document explains how the Summary API application works from a developer's 
 4. [Library Imports Explained](#library-imports-explained)
 5. [How Port 8000 is Defined](#how-port-8000-is-defined)
 6. [Request Flow Diagram](#request-flow-diagram)
+7. [Detection Methods](#detection-methods)
 
 ---
 
@@ -21,23 +22,18 @@ scrap-videos-and-image python/
 │
 ├── main.py                 # Entry point - FastAPI application
 ├── config.py               # Configuration settings
-├── prompts.py              # LLM prompt templates
+├── schemas.py              # Pydantic data models
 ├── requirements.txt        # Python dependencies
-├── .env                    # Environment variables (API keys)
-│
-├── models/                 # LLM Provider modules
-│   ├── __init__.py         # Exports all model classes
-│   ├── base.py             # Abstract base class
-│   ├── factory.py          # Factory pattern for model selection
-│   ├── ollama_provider.py  # Ollama (local) provider
-│   ├── gemini_provider.py  # Google Gemini provider
-│   └── openai_provider.py  # OpenAI provider
+├── .env                    # Environment variables
 │
 ├── services/               # Business logic
-│   ├── __init__.py         # Exports all services
-│   ├── summary_service.py  # Main summary orchestration
-│   ├── document_processor.py # PDF, DOCX, TXT extraction
-│   └── video_processor.py  # Video transcription
+│   ├── __init__.py         # Exports WordPressAnalyzer
+│   └── wordpress_analyzer.py  # WordPress detection service
+│
+├── routes/                 # API endpoints
+│   ├── __init__.py         # Exports routers
+│   ├── health.py           # Health check endpoint
+│   └── wordpress.py        # WordPress analysis endpoints
 │
 └── Docker files
     ├── Dockerfile
@@ -52,31 +48,29 @@ scrap-videos-and-image python/
 ### High-Level Overview
 
 ```
-User Request → FastAPI (main.py) → Service Layer → Model Provider → LLM → Response
+User Request → FastAPI (main.py) → WordPress Analyzer Service → HTTP Requests to Target Site → Analysis → Response
 ```
 
 ### Detailed Flow
 
-When you hit `http://localhost:8000/api/v1/summarize/attachment` or `/video`:
+When you hit `http://localhost:8000/api/v1/wordpress/analyze`:
 
 ```
-1. USER sends HTTP POST request with file
+1. USER sends HTTP POST/GET request with WordPress URL
         ↓
 2. FASTAPI (main.py) receives request
         ↓
-3. ENDPOINT FUNCTION validates file type and size
+3. ENDPOINT FUNCTION validates URL format
         ↓
-4. SUMMARY SERVICE is created with selected model
+4. WORDPRESS ANALYZER is created (context manager)
         ↓
-5. FILE PROCESSOR extracts content (text or transcript)
+5. ANALYZER fetches homepage HTML
         ↓
-6. MODEL PROVIDER (OpenRouter) is initialized
+6. DETECTION METHODS check for WordPress signatures
         ↓
-7. PROMPT is formatted with extracted content
+7. IF WORDPRESS: Extract version, theme, plugins, etc.
         ↓
-8. LLM generates summary
-        ↓
-9. RESPONSE is returned as JSON
+8. RESPONSE is returned as JSON
 ```
 
 ---
@@ -91,27 +85,33 @@ This is where everything starts. It's the "front door" of your application.
 # main.py
 
 # STEP 1: Import FastAPI framework
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
-# STEP 2: Create the application instance
+# STEP 2: Import routers
+from routes import health_router, wordpress_router
+
+# STEP 3: Create the application instance
 app = FastAPI(
-    title="Attachment & Video Summary API",
-    description="API for summarizing attachments and videos",
-    version="2.1.0"
+    title="WordPress Analyzer API",
+    description="API for analyzing WordPress sites without authentication",
+    version="1.0.0"
 )
 
-# STEP 3: Define endpoints (routes)
-@app.post("/api/v1/summarize/attachment")
-async def summarize_attachment(file: UploadFile):
-    # This function runs when user uploads a document
-    pass
+# STEP 4: Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-@app.post("/api/v1/summarize/video")
-async def summarize_video(file: UploadFile):
-    # This function runs when user uploads a video
-    pass
+# STEP 5: Include routers
+app.include_router(health_router)
+app.include_router(wordpress_router)
 
-# STEP 4: Run the server
+# STEP 6: Run the server
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)  # ← PORT DEFINED HERE!
@@ -133,11 +133,25 @@ Loads settings from environment variables (`.env` file).
 # config.py
 
 from pydantic_settings import BaseSettings
+from pydantic import Field
+from functools import lru_cache
 
 class Settings(BaseSettings):
-    # These values come from .env file or environment
-    openrouter_api_key: str = None
-    max_file_size_mb: int = 50
+    """Application settings loaded from environment variables."""
+
+    # API Settings
+    app_name: str = "WordPress Analyzer API"
+    debug: bool = False
+
+    # HTTP Client Settings
+    request_timeout: int = Field(default=30)
+    max_retries: int = Field(default=3)
+    user_agent: str = Field(default="Mozilla/5.0 (compatible; WordPress-Analyzer/1.0)")
+
+    # WordPress Detection Settings
+    enable_plugin_detection: bool = Field(default=True)
+    enable_theme_detection: bool = Field(default=True)
+    enable_version_detection: bool = Field(default=True)
 
     class Config:
         env_file = ".env"  # ← Reads from this file
@@ -150,190 +164,164 @@ def get_settings():
 
 **How it works:**
 1. When `get_settings()` is called, it reads `.env` file
-2. Values like `OPENROUTER_API_KEY=xxx` become `settings.openrouter_api_key`
+2. Values like `REQUEST_TIMEOUT=30` become `settings.request_timeout`
 3. `@lru_cache()` ensures settings are loaded only once (cached)
 
 ---
 
-### 3. `prompts.py` - Prompt Templates
+### 3. `schemas.py` - Pydantic Data Models
 
-Contains the instructions sent to the LLM.
+Defines the structure of request/response data.
 
 ```python
-# prompts.py
+# schemas.py
 
-DOCUMENT_SUMMARY_PROMPT = """You are an expert document analyzer...
+from pydantic import BaseModel, Field, HttpUrl
+from typing import Optional, List
+from datetime import datetime
 
-Document Content:
-{document_content}      ← Placeholder replaced with extracted text
+class WordPressVersion(BaseModel):
+    """WordPress version information."""
+    version: Optional[str] = None
+    detected_from: Optional[str] = None
 
-Output the summary in plain text format..."""
+class ThemeInfo(BaseModel):
+    """WordPress theme information."""
+    name: Optional[str] = None
+    slug: Optional[str] = None
+    version: Optional[str] = None
+    author: Optional[str] = None
 
-VIDEO_SUMMARY_PROMPT = """You are an expert at summarizing video transcripts...
+class PluginInfo(BaseModel):
+    """WordPress plugin information."""
+    name: Optional[str] = None
+    slug: Optional[str] = None
+    version: Optional[str] = None
 
-Video Transcript:
-{transcript}            ← Placeholder replaced with transcript
-
-Output the summary in plain text format..."""
+class WordPressSiteInfo(BaseModel):
+    """Complete WordPress site information."""
+    url: str
+    is_wordpress: bool
+    wordpress_version: Optional[WordPressVersion] = None
+    theme: Optional[ThemeInfo] = None
+    plugins: List[PluginInfo] = []
+    scan_duration_ms: Optional[int] = None
 ```
 
-**How placeholders work:**
-```python
-# In summary_service.py
-prompt = DOCUMENT_SUMMARY_PROMPT.format(
-    document_content="Extracted text from PDF/DOCX/TXT"
-)
-# Result: Placeholder {document_content} is replaced
-```
+**Why Pydantic?**
+- Automatic validation of data
+- Auto-generates API documentation
+- Type hints for better IDE support
+- Serialization to JSON
 
 ---
 
-### 4. `models/` - LLM Providers
+### 4. `services/wordpress_analyzer.py` - The Core Logic
 
-#### `models/base.py` - Abstract Base Class
-
-Defines the "contract" that all providers must follow.
+This is where all the WordPress detection happens.
 
 ```python
-# models/base.py
+# services/wordpress_analyzer.py
 
-from abc import ABC, abstractmethod
+import httpx
+from bs4 import BeautifulSoup
+import re
+from urllib.parse import urljoin
 
-class BaseModelProvider(ABC):
-    """All providers MUST implement these methods"""
+class WordPressAnalyzer:
+    """Analyzes WordPress sites and extracts information."""
 
-    @abstractmethod
-    async def generate(self, prompt: str) -> str:
-        """Every provider must have this method"""
-        pass
-```
-
-**Why use abstract class?**
-- Ensures all providers (Ollama, Gemini, OpenAI, OpenRouter) have the same interface
-- You can swap providers without changing other code
-
----
-
-#### `models/openrouter_provider.py` - OpenRouter Implementation
-
-```python
-# models/openrouter_provider.py
-
-class OpenRouterProvider(BaseModelProvider):
-    def __init__(self, model_name="gpt-4o-mini", api_key=None):
-        self.api_key = api_key
-        self.model_name = model_name
-
-    async def generate(self, prompt: str, system_prompt=None) -> str:
-        # Send request to OpenRouter API
-        response = await self.client.chat.completions.create(
-            model=self.model_name,
-            messages=[{"role": "user", "content": prompt}]
+    def __init__(self):
+        self.settings = get_settings()
+        self.client = httpx.AsyncClient(
+            timeout=self.settings.request_timeout,
+            follow_redirects=True
         )
-        return response.choices[0].message.content
+
+    async def analyze(self, url: str, deep_scan: bool = False):
+        """Main analysis method."""
+        # Fetch homepage
+        response = await self.client.get(url)
+        html_content = response.text
+        soup = BeautifulSoup(html_content, 'lxml')
+
+        # Check if WordPress
+        is_wp = await self._is_wordpress(url, html_content, soup)
+
+        if is_wp:
+            # Extract information
+            version = await self._detect_wordpress_version(url, html_content, soup)
+            theme = await self._detect_theme(url, html_content, soup)
+            plugins = await self._detect_plugins(url, html_content, soup, deep_scan)
+
+        return result
+```
+
+**Key Methods:**
+- `analyze()` - Main entry point
+- `_is_wordpress()` - Detect if site is WordPress
+- `_detect_wordpress_version()` - Find WP version
+- `_detect_theme()` - Find active theme
+- `_detect_plugins()` - Find active plugins
+- `_detect_server_info()` - Extract server details
+- `_check_security()` - Check security configs
+
+---
+
+### 5. `routes/wordpress.py` - API Endpoints
+
+Defines the HTTP endpoints users can call.
+
+```python
+# routes/wordpress.py
+
+from fastapi import APIRouter
+from schemas import AnalyzeRequest, AnalyzeResponse
+from services import WordPressAnalyzer
+
+router = APIRouter(prefix="/api/v1/wordpress", tags=["WordPress"])
+
+@router.post("/analyze", response_model=AnalyzeResponse)
+async def analyze_wordpress_site(request: AnalyzeRequest):
+    """
+    Analyze a WordPress site and extract information.
+    """
+    try:
+        async with WordPressAnalyzer() as analyzer:
+            site_info = await analyzer.analyze(
+                url=str(request.url),
+                deep_scan=request.deep_scan
+            )
+
+            return AnalyzeResponse(
+                success=True,
+                data=site_info,
+                message="Site analysis completed successfully"
+            )
+    except Exception as e:
+        return AnalyzeResponse(
+            success=False,
+            error=str(e),
+            message="An error occurred during site analysis"
+        )
 ```
 
 ---
 
-#### `models/factory.py` - Factory Pattern
+### 6. `routes/health.py` - Health Check
 
-Creates the right provider based on user's choice.
-
-```python
-# models/factory.py
-
-def get_model_provider(model_type, model_name=None, api_key=None):
-    if model_type == "openrouter":
-        return OpenRouterProvider(model_name or "gpt-4o-mini", api_key)
-    elif model_type == "ollama":
-        return OllamaProvider(model_name or "llama3.1")
-```
-
-**Why Factory Pattern?**
-- User says "I want openrouter" → Factory creates OpenRouterProvider
-- Main code doesn't need to know implementation details
-
----
-
-### 5. `services/` - Business Logic
-
-#### `services/summary_service.py` - Orchestrator
-
-Coordinates everything - connects prompts with providers.
+Simple endpoint to verify the API is running.
 
 ```python
-# services/summary_service.py
+# routes/health.py
 
-class SummaryService:
-    def __init__(self, model_type, model_name, api_key):
-        # Create the appropriate model provider
-        self.model_provider = get_model_provider(model_type, model_name, api_key)
-        self.document_processor = DocumentProcessor()
-        self.video_processor = VideoProcessor()
+from fastapi import APIRouter
 
-    async def summarize_document(self, filename, file_content):
-        # 1. Extract text from document
-        document_text = self.document_processor.extract_text(filename, file_content)
+router = APIRouter()
 
-        # 2. Format the prompt with extracted text
-        prompt = DOCUMENT_SUMMARY_PROMPT.format(document_content=document_text)
-
-        # 3. Send to LLM and get response
-        summary = await self.model_provider.generate(prompt, SYSTEM_PROMPT)
-
-        return {"summary": summary}
-
-    async def summarize_video(self, filename, file_content):
-        # 1. Process video and get transcript
-        video_result = self.video_processor.process_video(filename, file_content)
-        transcript = video_result["transcript"]
-
-        # 2. Format the prompt with transcript
-        prompt = VIDEO_SUMMARY_PROMPT.format(transcript=transcript)
-
-        # 3. Send to LLM and get response
-        summary = await self.model_provider.generate(prompt, SYSTEM_PROMPT)
-
-        return {"summary": summary, "transcript": transcript}
-```
-
----
-
-#### `services/document_processor.py` - File Extraction
-
-Extracts text from different file types.
-
-```python
-# services/document_processor.py
-
-class DocumentProcessor:
-    @staticmethod
-    def extract_text(filename, file_content):
-        ext = get_file_extension(filename)  # ".pdf", ".docx", ".txt"
-
-        if ext == ".pdf":
-            return extract_text_from_pdf(file_content)
-        elif ext == ".docx":
-            return extract_text_from_docx(file_content)
-        elif ext == ".txt":
-            return file_content.decode("utf-8")
-```
-
----
-
-#### `services/video_processor.py` - Video Transcription
-
-Extracts audio from video and transcribes using Whisper.
-
-```python
-# services/video_processor.py
-
-class VideoProcessor:
-    def process_video(self, filename, file_content):
-        # 1. Save video to temp file
-        # 2. Extract audio using moviepy
-        # 3. Transcribe audio using Whisper
-        # 4. Return transcript text
+@router.get("/health")
+async def health_check():
+    return {"status": "healthy", "version": "1.0.0"}
 ```
 
 ---
@@ -345,11 +333,7 @@ class VideoProcessor:
 | Import | Why We Need It |
 |--------|----------------|
 | `FastAPI` | Web framework - handles HTTP requests |
-| `HTTPException` | Return error responses (400, 500, etc.) |
-| `UploadFile, File` | Handle file uploads |
-| `Form` | Handle form data in requests |
-| `CORSMiddleware` | Allow requests from different domains |
-| `BaseModel` | Define request/response data structures |
+| `CORSMiddleware` | Allow requests from different domains (browsers) |
 
 ### `config.py` imports
 
@@ -357,25 +341,24 @@ class VideoProcessor:
 |--------|----------------|
 | `BaseSettings` | Load config from environment variables |
 | `lru_cache` | Cache settings (load once, reuse) |
+| `Field` | Define field validation and defaults |
 
-### `models/` imports
-
-| Import | Why We Need It |
-|--------|----------------|
-| `ollama` | Client library to talk to Ollama server |
-| `google.generativeai` | Google's Gemini API client |
-| `openai` | OpenAI/OpenRouter API client |
-| `ABC, abstractmethod` | Create abstract base class |
-
-### `services/` imports
+### `schemas.py` imports
 
 | Import | Why We Need It |
 |--------|----------------|
-| `PyPDF2` | Extract text from PDF files |
-| `python-docx` | Extract text from Word documents |
-| `faster_whisper` | Transcribe audio to text |
-| `moviepy` | Extract audio from video files |
-| `tempfile` | Create temporary files for processing |
+| `BaseModel` | Define data structures with validation |
+| `HttpUrl` | Validate URL format |
+| `Optional, List` | Type hints for optional and list fields |
+
+### `services/wordpress_analyzer.py` imports
+
+| Import | Why We Need It |
+|--------|----------------|
+| `httpx` | Modern async HTTP client |
+| `BeautifulSoup` | Parse HTML and extract data |
+| `re` | Regular expressions for pattern matching |
+| `urljoin` | Safely join URL parts |
 
 ---
 
@@ -417,47 +400,43 @@ ports:
 
 ## Request Flow Diagram
 
-### Attachment Summary Flow
+### WordPress Analysis Flow
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                         USER REQUEST                            │
-│  POST http://localhost:8000/api/v1/summarize/attachment         │
-│  Body: multipart/form-data with file upload                     │
+│  POST http://localhost:8000/api/v1/wordpress/analyze            │
+│  Body: {"url": "https://example.com", "deep_scan": false}      │
 └─────────────────────────────────────────────────────────────────┘
                                 │
                                 ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                     main.py - FastAPI                           │
-│  1. Receives HTTP request with file                             │
-│  2. Validates file type (PDF, DOCX, TXT)                        │
-│  3. Validates file size                                         │
-│  4. Calls summarize_attachment() function                       │
+│  1. Receives HTTP request with URL                              │
+│  2. Validates request body (Pydantic)                           │
+│  3. Routes to wordpress.py endpoint                             │
 └─────────────────────────────────────────────────────────────────┘
                                 │
                                 ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│              services/summary_service.py                        │
-│  1. __init__: Call factory to create OpenRouterProvider         │
-│  2. summarize_document(): Extract text from file                │
-│  3. Format prompt with extracted content                        │
-│  4. Call model_provider.generate(prompt)                        │
+│              routes/wordpress.py                                │
+│  1. Receives AnalyzeRequest                                     │
+│  2. Creates WordPressAnalyzer instance                          │
+│  3. Calls analyzer.analyze(url)                                 │
+│  4. Returns AnalyzeResponse                                     │
 └─────────────────────────────────────────────────────────────────┘
                                 │
                                 ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│              services/document_processor.py                     │
-│  1. Determine file type from extension                          │
-│  2. Extract text using appropriate library                      │
-│  3. Return extracted text content                               │
-└─────────────────────────────────────────────────────────────────┘
-                                │
-                                ▼
-┌─────────────────────────────────────────────────────────────────┐
-│              models/openrouter_provider.py                      │
-│  1. generate() receives formatted prompt                        │
-│  2. Sends to OpenRouter API                                     │
-│  3. Returns generated summary                                   │
+│          services/wordpress_analyzer.py                         │
+│  1. Fetch homepage HTML with httpx                              │
+│  2. Parse HTML with BeautifulSoup                               │
+│  3. Check if WordPress (_is_wordpress)                          │
+│  4. Detect version (_detect_wordpress_version)                  │
+│  5. Detect theme (_detect_theme)                                │
+│  6. Detect plugins (_detect_plugins)                            │
+│  7. Check security (_check_security)                            │
+│  8. Return WordPressSiteInfo                                    │
 └─────────────────────────────────────────────────────────────────┘
                                 │
                                 ▼
@@ -465,9 +444,121 @@ ports:
 │                      USER RESPONSE                              │
 │  {                                                              │
 │    "success": true,                                             │
-│    "summary": "Overview: ..."                                   │
+│    "data": {                                                    │
+│      "url": "https://example.com",                              │
+│      "is_wordpress": true,                                      │
+│      "wordpress_version": {"version": "6.4", ...},              │
+│      "theme": {"name": "...", ...},                             │
+│      "plugins": [...]                                           │
+│    }                                                            │
 │  }                                                              │
 └─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Detection Methods
+
+### 1. WordPress Detection
+
+**How we check if a site is WordPress:**
+
+```python
+async def _is_wordpress(self, url, html, soup):
+    # Method 1: Meta generator tag
+    generator = soup.find('meta', attrs={'name': 'generator'})
+    if generator and 'wordpress' in generator.get('content', '').lower():
+        return True
+
+    # Method 2: wp-content or wp-includes in HTML
+    if 'wp-content' in html or 'wp-includes' in html:
+        return True
+
+    # Method 3: WordPress REST API endpoint
+    wp_json_url = urljoin(url, '/wp-json/')
+    response = await self.client.get(wp_json_url)
+    if response.status_code == 200:
+        return True
+
+    # Method 4: Common WordPress files
+    for file_path in ['/wp-login.php', '/xmlrpc.php']:
+        check_url = urljoin(url, file_path)
+        response = await self.client.head(check_url)
+        if response.status_code in [200, 302, 403]:
+            return True
+
+    return False
+```
+
+---
+
+### 2. Version Detection
+
+**Multiple methods to find WordPress version:**
+
+```python
+async def _detect_wordpress_version(self, url, html, soup):
+    # Method 1: Meta generator tag
+    # <meta name="generator" content="WordPress 6.4" />
+
+    # Method 2: RSS feed
+    # https://example.com/feed/
+
+    # Method 3: readme.html
+    # https://example.com/readme.html
+
+    # Method 4: CSS/JS version strings
+    # /wp-includes/css/dist/block-library/style.min.css?ver=6.4
+```
+
+---
+
+### 3. Theme Detection
+
+**How we find the active theme:**
+
+```python
+async def _detect_theme(self, url, html, soup):
+    # Look for theme paths in HTML
+    # Example: /wp-content/themes/twentytwentyfour/style.css
+
+    theme_pattern = re.compile(r'/wp-content/themes/([^/]+)/')
+    matches = theme_pattern.findall(html)
+
+    # Most common theme = active theme
+    theme_slug = most_common(matches)
+
+    # Try to get theme info from style.css
+    style_url = f'/wp-content/themes/{theme_slug}/style.css'
+    # Parse: Theme Name, Version, Author
+```
+
+---
+
+### 4. Plugin Detection
+
+**How we detect plugins:**
+
+```python
+async def _detect_plugins(self, url, html, soup, deep_scan):
+    # Look for plugin paths in HTML
+    # Example: /wp-content/plugins/contact-form-7/includes/css/styles.css
+
+    plugin_pattern = re.compile(r'/wp-content/plugins/([^/]+)/')
+    matches = plugin_pattern.findall(html)
+
+    plugins = []
+    for plugin_slug in unique(matches):
+        plugin_info = PluginInfo(slug=plugin_slug)
+
+        # If deep_scan, try to get version from readme.txt
+        if deep_scan:
+            readme_url = f'/wp-content/plugins/{plugin_slug}/readme.txt'
+            # Parse: Stable tag: 1.2.3
+
+        plugins.append(plugin_info)
+
+    return plugins
 ```
 
 ---
@@ -476,26 +567,37 @@ ports:
 
 | File | Purpose | When It's Used |
 |------|---------|----------------|
-| `main.py` | Entry point, defines API endpoints | Every request |
+| `main.py` | Entry point, defines API app | App startup |
 | `config.py` | Load settings from .env | App startup |
-| `prompts.py` | LLM instruction templates | When generating summaries |
-| `models/factory.py` | Create correct provider | When service is initialized |
-| `models/openrouter_provider.py` | Talk to OpenRouter API | When model_type="openrouter" |
-| `services/summary_service.py` | Orchestrate summary generation | Every summary request |
-| `services/document_processor.py` | Extract text from files | Attachment endpoint |
-| `services/video_processor.py` | Transcribe videos | Video endpoint |
+| `schemas.py` | Define data structures | Every request/response |
+| `services/wordpress_analyzer.py` | WordPress detection logic | Every analysis request |
+| `routes/wordpress.py` | WordPress API endpoints | WordPress analysis requests |
+| `routes/health.py` | Health check endpoint | Health checks |
 
 ---
 
 ## Summary
 
-1. **User uploads file** → `main.py` receives request
-2. **Validation** → File type and size checked
-3. **Service Creation** → `SummaryService` is created with correct provider
-4. **Content Extraction** → Document processor or video processor extracts content
-5. **Provider Selection** → Factory creates OpenRouter provider
-6. **Prompt Formatting** → Extracted content inserted into prompt template
-7. **LLM Call** → Provider sends prompt to LLM
-8. **Response** → Plain text summary returned to user
+1. **User sends request** → `main.py` receives it
+2. **Validation** → Pydantic validates URL
+3. **Analyzer Creation** → `WordPressAnalyzer` instance created
+4. **HTTP Requests** → Fetch homepage and WordPress files
+5. **HTML Parsing** → BeautifulSoup extracts data
+6. **Pattern Matching** → Regex finds themes/plugins
+7. **Detection** → Multiple methods detect WordPress info
+8. **Response** → JSON data returned to user
 
 The port 8000 is defined in `main.py` at the bottom in `uvicorn.run()` call!
+
+---
+
+## Key Differences from Traditional APIs
+
+Unlike APIs that require authentication:
+- ✅ No admin username/password needed
+- ✅ Only analyzes publicly accessible data
+- ✅ Similar to browser view-source
+- ✅ Ethical and legal (public information)
+- ✅ Fast (no complex authentication flows)
+
+This is exactly how tools like Wappalyzer, BuiltWith, and HackerTarget work!
