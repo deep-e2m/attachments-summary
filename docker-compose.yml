@@ -5,7 +5,7 @@ services:
       dockerfile: Dockerfile
     container_name: wordpress-analyzer-api
     ports:
-      - "8001:8000"  # Using 8001 to avoid conflicts with other apps
+      - "8000:8000"  # WordPress Analyzer API on port 8000
     env_file:
       - .env
     environment:

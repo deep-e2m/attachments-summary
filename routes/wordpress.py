@@ -1,32 +1,31 @@
 """
 WordPress analyzer API routes.
 """
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, status, Query
 import httpx
 
-from schemas import AnalyzeResponse
 from services import WordPressAnalyzer
 
 
 router = APIRouter(prefix="/api/v1/wordpress", tags=["WordPress"])
 
 
-@router.get("/analyze/{url:path}", response_model=AnalyzeResponse, status_code=status.HTTP_200_OK)
-async def analyze_wordpress_site(url: str):
+@router.get("/analyze", status_code=status.HTTP_200_OK)
+async def analyze_wordpress_site(url: str = Query(..., description="WordPress site URL to analyze")):
     """
-    Analyze a WordPress site and extract comprehensive information.
+    Analyze a WordPress site and generate a summary.
 
-    Detects WordPress version, active theme, active plugins with descriptions, and site metadata.
+    Returns a text summary with WordPress version, theme information, plugins, and PHP version.
     No authentication required.
 
     Args:
-        url: The WordPress site URL to analyze
+        url: The WordPress site URL to analyze (query parameter)
 
     Returns:
-        AnalyzeResponse with detected site information
+        JSON with success status and summary
 
     Example:
-        GET /api/v1/wordpress/analyze/https://wordpress.org
+        GET /api/v1/wordpress/analyze?url=https://wordpress.org
     """
     try:
         # Normalize URL
@@ -36,29 +35,72 @@ async def analyze_wordpress_site(url: str):
         async with WordPressAnalyzer() as analyzer:
             site_info = await analyzer.analyze(url=url, deep_scan=True)
 
-            return AnalyzeResponse(
-                success=True,
-                data=site_info,
-                message="Site analysis completed successfully"
-            )
+            # Check if it's WordPress
+            if not site_info.is_wordpress:
+                return {
+                    "success": False,
+                    "summary": f"The site '{url}' is not a WordPress site."
+                }
+
+            # Generate summary
+            summary_parts = []
+
+            # WordPress version
+            if site_info.wordpress_version:
+                summary_parts.append(f"WordPress Version: {site_info.wordpress_version.version}")
+
+            # Theme information
+            if site_info.theme:
+                theme_info = f"Theme: {site_info.theme.name}"
+                if site_info.theme.version:
+                    theme_info += f" (v{site_info.theme.version})"
+                if site_info.theme.author:
+                    theme_info += f" by {site_info.theme.author}"
+                summary_parts.append(theme_info)
+
+            # Plugins information
+            if site_info.plugins and len(site_info.plugins) > 0:
+                summary_parts.append(f"\nActive Plugins ({len(site_info.plugins)}):")
+                for plugin in site_info.plugins:
+                    plugin_info = f"  - {plugin.name}"
+                    if plugin.version:
+                        plugin_info += f" (v{plugin.version})"
+                    if plugin.description:
+                        # Clean and truncate description
+                        desc = plugin.description.replace('\n', ' ').strip()
+                        if len(desc) > 100:
+                            desc = desc[:100] + "..."
+                        plugin_info += f": {desc}"
+                    summary_parts.append(plugin_info)
+
+            # Site metadata
+            if site_info.metadata:
+                if site_info.metadata.title:
+                    summary_parts.append(f"\nSite Title: {site_info.metadata.title}")
+                if site_info.metadata.description:
+                    summary_parts.append(f"Description: {site_info.metadata.description}")
+
+            summary = "\n".join(summary_parts)
+
+            return {
+                "success": True,
+                "summary": summary
+            }
 
     except httpx.HTTPStatusError as e:
-        return AnalyzeResponse(
-            success=False,
-            error=f"HTTP error occurred: {e.response.status_code}",
-            message="Failed to access the site"
-        )
+        return {
+            "success": False,
+            "summary": f"Failed to access the site. HTTP error: {e.response.status_code}"
+        }
 
     except httpx.RequestError as e:
-        return AnalyzeResponse(
-            success=False,
-            error=f"Request error: {str(e)}",
-            message="Failed to connect to the site"
-        )
+        return {
+            "success": False,
+            "summary": f"Failed to connect to the site: {str(e)}"
+        }
 
     except Exception as e:
-        return AnalyzeResponse(
-            success=False,
-            error=str(e),
-            message="An error occurred during site analysis"
-        )
+        return {
+            "success": False,
+            "summary": f"An error occurred during site analysis: {str(e)}"
+        }
