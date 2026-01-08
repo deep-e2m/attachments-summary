@@ -6,12 +6,37 @@
 
 ---
 
+## DevOps Responsibilities
+
+### What You Need To Configure
+
+| Task | Required? | Details |
+|------|-----------|---------|
+| **External Port Mapping** | YES | Change `8000:8000` to your desired port (e.g., `80:8000`, `8080:8000`) |
+| **Domain/DNS** | YES | Point your domain to server IP |
+| **SSL/TLS Certificate** | Recommended | For HTTPS access |
+| **Reverse Proxy (Nginx)** | Recommended | For SSL termination and load balancing |
+| **Firewall Rules** | YES | Allow inbound on your external port, outbound on 80/443 |
+| **Environment Variables** | NO | All have defaults, optional to customize |
+
+### What's Already Done (No Changes Needed)
+
+| Item | Status |
+|------|--------|
+| Application code | Ready |
+| Internal port (8000) | Hardcoded, don't change |
+| Dockerfile | Ready |
+| Health checks | Configured |
+| CORS | Enabled (allows all origins) |
+
+---
+
 ## Quick Summary
 
 | Item | Value |
 |------|-------|
 | **Application Type** | Python FastAPI REST API |
-| **Internal Port** | 8000 |
+| **Internal Port** | 8000 (DO NOT CHANGE) |
 | **Health Check** | `GET /health` |
 | **Docker Ready** | Yes |
 | **Python Version** | 3.11+ |
@@ -20,30 +45,54 @@
 
 ---
 
-## Files to Provide
+## Files Included
 
 ```
 ✅ Dockerfile           - Container build instructions
-✅ docker-compose.yml   - Container orchestration
+✅ docker-compose.yml   - Container orchestration (EDIT PORT HERE)
 ✅ requirements.txt     - Python dependencies
-✅ .env.example         - Environment variables template
-✅ All source code      - Application code
+✅ .env.example         - Environment variables template (optional)
+✅ All source code      - Application code (NO CHANGES NEEDED)
 ```
 
 ---
 
-## Docker Build & Run
+## Quick Start (3 Steps)
 
-### Build Image
+### Step 1: Configure External Port
+Edit `docker-compose.yml` to set your desired external port:
+```yaml
+ports:
+  - "80:8000"      # Option A: Expose on port 80
+  - "8080:8000"    # Option B: Expose on port 8080
+  - "443:8000"     # Option C: Behind SSL (use with reverse proxy)
+```
+
+### Step 2: Build and Run
+```bash
+docker-compose up -d --build
+```
+
+### Step 3: Verify
+```bash
+curl http://YOUR_SERVER_IP:YOUR_PORT/health
+# Expected: {"status": "healthy", "version": "1.0.0"}
+```
+
+---
+
+## Docker Build & Run (Alternative Methods)
+
+### Build Image Manually
 ```bash
 docker build -t wordpress-analyzer-api:latest .
 ```
 
-### Run Container
+### Run Container Manually
 ```bash
 docker run -d \
   --name wordpress-analyzer \
-  -p 8000:8000 \
+  -p 80:8000 \
   wordpress-analyzer-api:latest
 ```
 
@@ -52,10 +101,10 @@ docker run -d \
 docker-compose up -d --build
 ```
 
-**Access the API:**
-- API: `http://localhost:8001`
-- Docs: `http://localhost:8001/docs`
-- Health: `http://localhost:8001/health`
+**Access the API (replace with your configured port):**
+- API: `http://YOUR_SERVER:PORT`
+- Docs: `http://YOUR_SERVER:PORT/docs`
+- Health: `http://YOUR_SERVER:PORT/health`
 
 ---
 
@@ -99,19 +148,35 @@ RATE_LIMIT_REQUESTS=10
 
 ## Port Configuration
 
-| Port | Protocol | Description |
-|------|----------|-------------|
-| **8000** | HTTP | Application port (internal) |
+| Port | Type | Description |
+|------|------|-------------|
+| **8000** | Internal (Container) | Application port - DO NOT CHANGE |
+| **Your Choice** | External (Host) | Configure in docker-compose.yml |
 
-**Reverse Proxy Configuration:**
+### How Port Mapping Works
+
 ```
-External (443/HTTPS) → Nginx/Load Balancer → Container (8000)
+Internet → Your External Port → Container Port 8000 → Application
+```
+
+**Example Configurations:**
+
+| Use Case | docker-compose.yml | Access URL |
+|----------|-------------------|------------|
+| Development | `"8000:8000"` | http://localhost:8000 |
+| Production (HTTP) | `"80:8000"` | http://yourdomain.com |
+| Production (behind Nginx) | `"8000:8000"` | Nginx handles external port |
+| Custom Port | `"3000:8000"` | http://yourdomain.com:3000 |
+
+**Recommended Production Setup:**
+```
+Internet (443/HTTPS) → Nginx (SSL termination) → Container (8000)
 ```
 
 **Docker Compose Port Mapping:**
 ```yaml
 ports:
-  - "8001:8000"  # Host port 8001 → Container port 8000
+  - "80:8000"  # Host port 80 → Container port 8000
 ```
 
 ---
@@ -396,20 +461,30 @@ scrape_configs:
 
 ## Testing After Deployment
 
+Replace `YOUR_SERVER` with your actual server IP or domain, and `PORT` with your configured port.
+
 ### 1. Health Check
 ```bash
+# If using port 80:
+curl http://YOUR_SERVER/health
+
+# If using custom port (e.g., 8080):
+curl http://YOUR_SERVER:8080/health
+
+# If using HTTPS with domain:
 curl https://api.yourdomain.com/health
+
 # Expected: {"status": "healthy", "version": "1.0.0"}
 ```
 
 ### 2. API Documentation
 ```
-Open: https://api.yourdomain.com/docs
+Open in browser: http://YOUR_SERVER:PORT/docs
 ```
 
 ### 3. Test WordPress Site Analysis (POST)
 ```bash
-curl -X POST "https://api.yourdomain.com/api/v1/wordpress/analyze" \
+curl -X POST "http://YOUR_SERVER:PORT/api/v1/wordpress/analyze" \
   -H "Content-Type: application/json" \
   -d '{"url": "https://wordpress.org", "deep_scan": false}'
 ```
@@ -436,12 +511,12 @@ curl -X POST "https://api.yourdomain.com/api/v1/wordpress/analyze" \
 
 ### 4. Test WordPress Site Analysis (GET)
 ```bash
-curl "https://api.yourdomain.com/api/v1/wordpress/analyze/techcrunch.com"
+curl "http://YOUR_SERVER:PORT/api/v1/wordpress/analyze?url=https://techcrunch.com"
 ```
 
 ### 5. Test Non-WordPress Site
 ```bash
-curl "https://api.yourdomain.com/api/v1/wordpress/analyze/google.com"
+curl "http://YOUR_SERVER:PORT/api/v1/wordpress/analyze?url=https://google.com"
 ```
 
 **Expected Response:**
