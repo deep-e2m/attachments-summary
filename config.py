@@ -16,6 +16,7 @@ class Settings(BaseSettings):
 
     # HTTP Client Settings
     request_timeout: int = Field(default=30, description="HTTP request timeout in seconds")
+    analysis_timeout: int = Field(default=120, description="Overall analysis timeout in seconds")
     max_retries: int = Field(default=3, description="Maximum number of HTTP retries")
     user_agent: str = Field(
         default="Mozilla/5.0 (compatible; WordPress-Analyzer/1.0)",
