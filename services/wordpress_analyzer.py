@@ -414,6 +414,10 @@ class WordPressAnalyzer:
                 if response.status_code == 200:
                     content = response.text[:3000]
 
+                    # Skip if response is HTML instead of a real readme.txt
+                    if content.strip().lower().startswith(('<!doctype', '<html')):
+                        return plugin_info
+
                     version_match = re.search(r'Stable tag:\s*([\d.]+)', content, re.IGNORECASE)
                     if version_match:
                         plugin_info.version = version_match.group(1).strip()
@@ -428,6 +432,8 @@ class WordPressAnalyzer:
                         desc_match = re.search(pattern, content, re.IGNORECASE | re.DOTALL)
                         if desc_match:
                             description = desc_match.group(1).strip()
+                            # Strip any stray HTML tags
+                            description = re.sub(r'<[^>]+>', '', description)
                             description = ' '.join(description.split())
                             if len(description) > 10:
                                 plugin_info.description = description[:200]
