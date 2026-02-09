@@ -3,6 +3,7 @@ WordPress analyzer API routes.
 """
 import asyncio
 from fastapi import APIRouter, status, Query
+from fastapi.responses import JSONResponse
 import httpx
 
 from services import WordPressAnalyzer
@@ -99,10 +100,13 @@ async def analyze_wordpress_site(url: str = Query(..., description="WordPress si
         }
 
     except asyncio.TimeoutError:
-        return {
-            "success": False,
-            "summary": f"Analysis timed out after {settings.analysis_timeout} seconds. The site '{url}' is taking too long to respond. Try again later."
-        }
+        return JSONResponse(
+            status_code=504,
+            content={
+                "success": False,
+                "summary": f"Analysis timed out after {settings.analysis_timeout} seconds. The site '{url}' is taking too long to respond. Try again later."
+            }
+        )
 
     except httpx.HTTPStatusError as e:
         return {
