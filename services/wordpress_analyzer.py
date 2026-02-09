@@ -3,6 +3,7 @@ WordPress site analyzer service.
 Detects WordPress installations and extracts information without authentication.
 """
 import re
+import asyncio
 import httpx
 from bs4 import BeautifulSoup
 from typing import Optional, List, Dict, Any, Tuple
@@ -72,10 +73,14 @@ class WordPressAnalyzer:
             if not is_wp:
                 return result
 
-            # Extract information
-            result.wordpress_version = await self._detect_wordpress_version(url, html_content, soup)
-            result.theme = await self._detect_theme(url, html_content, soup)
-            result.plugins = await self._detect_plugins(url, html_content, soup, deep_scan)
+            # Extract information IN PARALLEL
+            version_task = self._detect_wordpress_version(url, html_content, soup)
+            theme_task = self._detect_theme(url, html_content, soup)
+            plugins_task = self._detect_plugins(url, html_content, soup, deep_scan)
+
+            result.wordpress_version, result.theme, result.plugins = await asyncio.gather(
+                version_task, theme_task, plugins_task
+            )
             result.metadata = self._extract_metadata(soup)
 
             return result
@@ -85,12 +90,12 @@ class WordPressAnalyzer:
 
     async def _is_wordpress(self, url: str, html: str, soup: BeautifulSoup) -> bool:
         """Check if the site is running WordPress."""
-        # Check 1: Meta generator tag
+        # Check 1: Meta generator tag (instant, no HTTP)
         generator = soup.find('meta', attrs={'name': 'generator'})
         if generator and 'wordpress' in generator.get('content', '').lower():
             return True
 
-        # Check 2: wp-content or wp-includes in HTML
+        # Check 2: wp-content or wp-includes in HTML (instant, no HTTP)
         if 'wp-content' in html or 'wp-includes' in html:
             return True
 
@@ -105,16 +110,20 @@ class WordPressAnalyzer:
         except:
             pass
 
-        # Check 4: Common WordPress files
+        # Check 4: Common WordPress files - CHECK IN PARALLEL
         common_files = ['/wp-login.php', '/xmlrpc.php', '/wp-admin/']
-        for file_path in common_files:
+
+        async def check_wp_file(file_path: str) -> bool:
             try:
                 check_url = urljoin(url, file_path)
                 response = await self.client.head(check_url)
-                if response.status_code in [200, 302, 403]:
-                    return True
+                return response.status_code in [200, 302, 403]
             except:
-                continue
+                return False
+
+        results = await asyncio.gather(*[check_wp_file(f) for f in common_files])
+        if any(results):
+            return True
 
         return False
 
@@ -168,7 +177,6 @@ class WordPressAnalyzer:
         version_pattern = re.compile(r'ver=([\d.]+)')
         matches = version_pattern.findall(html)
         if matches:
-            # Get most common version
             from collections import Counter
             most_common = Counter(matches).most_common(1)
             if most_common:
@@ -193,7 +201,6 @@ class WordPressAnalyzer:
 
         if matches:
             from collections import Counter
-            # Get most common theme slug (likely the active theme)
             most_common = Counter(matches).most_common(1)
             if most_common:
                 theme_slug = most_common[0][0]
@@ -203,31 +210,44 @@ class WordPressAnalyzer:
                 # Try to get theme URL
                 theme_info.template_url = urljoin(url, f'/wp-content/themes/{theme_slug}/')
 
-                # Try to get screenshot
-                screenshot_url = urljoin(url, f'/wp-content/themes/{theme_slug}/screenshot.png')
-                try:
-                    response = await self.client.head(screenshot_url)
-                    if response.status_code == 200:
-                        theme_info.screenshot_url = screenshot_url
-                except:
-                    pass
+                # Check screenshot and style.css IN PARALLEL
+                async def fetch_screenshot():
+                    screenshot_url = urljoin(url, f'/wp-content/themes/{theme_slug}/screenshot.png')
+                    try:
+                        response = await self.client.head(screenshot_url)
+                        if response.status_code == 200:
+                            return screenshot_url
+                    except:
+                        pass
+                    return None
 
-                # Try to get version from style.css
-                try:
+                async def fetch_style():
                     style_url = urljoin(url, f'/wp-content/themes/{theme_slug}/style.css')
-                    response = await self.client.get(style_url)
-                    if response.status_code == 200:
-                        # Parse style.css header
-                        content = response.text[:2000]  # Only read first 2000 chars
-                        version_match = re.search(r'Version:\s*([\d.]+)', content)
-                        author_match = re.search(r'Author:\s*([^\n]+)', content)
+                    try:
+                        response = await self.client.get(style_url)
+                        if response.status_code == 200:
+                            content = response.text[:2000]
+                            version_match = re.search(r'Version:\s*([\d.]+)', content)
+                            author_match = re.search(r'Author:\s*([^\n]+)', content)
+                            return (
+                                version_match.group(1).strip() if version_match else None,
+                                author_match.group(1).strip() if author_match else None
+                            )
+                    except:
+                        pass
+                    return (None, None)
 
-                        if version_match:
-                            theme_info.version = version_match.group(1).strip()
-                        if author_match:
-                            theme_info.author = author_match.group(1).strip()
-                except:
-                    pass
+                screenshot_result, style_result = await asyncio.gather(
+                    fetch_screenshot(), fetch_style()
+                )
+
+                if screenshot_result:
+                    theme_info.screenshot_url = screenshot_result
+                version_val, author_val = style_result
+                if version_val:
+                    theme_info.version = version_val
+                if author_val:
+                    theme_info.author = author_val
 
                 return theme_info
 
@@ -245,7 +265,6 @@ class WordPressAnalyzer:
         detected_slugs = set()
 
         # Method 1: Look for plugin paths in HTML source (CSS, JS, images, etc.)
-        # This regex catches plugins in URLs like: /wp-content/plugins/plugin-name/
         plugin_pattern = re.compile(r'/wp-content/plugins/([^/\'"?\s]+)', re.IGNORECASE)
         matches = plugin_pattern.findall(html)
         for slug in matches:
@@ -271,26 +290,34 @@ class WordPressAnalyzer:
                     detected_slugs.add(slug)
 
         # Method 4: Check for plugin-specific HTML comments
-        # Many plugins leave comments like: <!-- Plugin Name -->
         comments = soup.find_all(string=lambda text: isinstance(text, str) and '<!--' in str(text))
+        comment_slugs_to_verify = []
         for comment in comments:
             comment_text = str(comment).lower()
-            # Look for plugin identifiers in comments
             if 'plugin' in comment_text or 'wp-' in comment_text:
-                # Try to extract plugin slug from comment
                 match = re.search(r'(?:plugin[:\s]+|wp-)([a-z0-9-]+)', comment_text)
                 if match:
                     potential_slug = match.group(1)
                     if len(potential_slug) > 3 and potential_slug not in detected_slugs:
-                        # Verify it's a real plugin by checking if path exists
                         if deep_scan:
-                            plugin_path = urljoin(url, f'/wp-content/plugins/{potential_slug}/')
-                            try:
-                                response = await self.client.head(plugin_path, timeout=5)
-                                if response.status_code in [200, 403]:
-                                    detected_slugs.add(potential_slug)
-                            except:
-                                pass
+                            comment_slugs_to_verify.append(potential_slug)
+
+        # Verify comment-found slugs IN PARALLEL
+        if comment_slugs_to_verify:
+            async def verify_plugin_slug(slug: str) -> Optional[str]:
+                plugin_path = urljoin(url, f'/wp-content/plugins/{slug}/')
+                try:
+                    response = await self.client.head(plugin_path, timeout=5)
+                    if response.status_code in [200, 403]:
+                        return slug
+                except:
+                    pass
+                return None
+
+            results = await asyncio.gather(*[verify_plugin_slug(s) for s in comment_slugs_to_verify])
+            for slug in results:
+                if slug:
+                    detected_slugs.add(slug)
 
         # Method 5: Check for plugin-specific meta tags
         for meta in soup.find_all('meta'):
@@ -302,7 +329,6 @@ class WordPressAnalyzer:
                     detected_slugs.add(slug)
 
         # Method 6: Look for plugin-specific CSS classes and IDs
-        # Many plugins add unique classes/IDs to elements
         plugin_indicators = {
             'yoast': 'wordpress-seo',
             'woocommerce': 'woocommerce',
@@ -330,7 +356,6 @@ class WordPressAnalyzer:
         for script in soup.find_all('script', src=False):
             script_text = script.string if script.string else ''
             if script_text:
-                # Look for plugin slugs in inline JavaScript
                 match = re.search(r'/wp-content/plugins/([^/\'"]+)', script_text)
                 if match:
                     slug = match.group(1)
@@ -340,15 +365,13 @@ class WordPressAnalyzer:
         # Method 8: Check for plugin-specific generator tags
         for meta in soup.find_all('meta', attrs={'name': 'generator'}):
             content = meta.get('content', '').lower()
-            # Some plugins add their own generator tags
             if 'plugin' in content or any(ind in content for ind in plugin_indicators.keys()):
                 for indicator, slug in plugin_indicators.items():
                     if indicator in content and slug not in detected_slugs:
                         detected_slugs.add(slug)
 
-        # Method 9: Deep scan - check common plugin directories
+        # Method 9: Deep scan - check common plugin directories IN PARALLEL
         if deep_scan:
-            # List of popular WordPress plugins to check
             common_plugins = [
                 'wordpress-seo', 'akismet', 'jetpack', 'contact-form-7',
                 'woocommerce', 'elementor', 'wpforms-lite', 'wordfence',
@@ -358,59 +381,63 @@ class WordPressAnalyzer:
                 'really-simple-ssl', 'redirection', 'wpforms', 'sucuri-scanner'
             ]
 
-            for plugin_slug in common_plugins:
-                if plugin_slug not in detected_slugs:
-                    # Check if plugin directory exists
-                    plugin_url = urljoin(url, f'/wp-content/plugins/{plugin_slug}/')
-                    try:
-                        response = await self.client.head(plugin_url, timeout=5)
-                        if response.status_code in [200, 403]:
-                            detected_slugs.add(plugin_slug)
-                    except:
-                        pass
+            plugins_to_check = [p for p in common_plugins if p not in detected_slugs]
 
-        # Now create PluginInfo objects for all detected plugins
-        for plugin_slug in detected_slugs:
-            # Skip invalid slugs
-            if not plugin_slug or len(plugin_slug) < 2 or not re.match(r'^[a-z0-9\-_]+$', plugin_slug, re.IGNORECASE):
-                continue
+            async def check_plugin_exists(plugin_slug: str) -> Optional[str]:
+                plugin_url = urljoin(url, f'/wp-content/plugins/{plugin_slug}/')
+                try:
+                    response = await self.client.head(plugin_url, timeout=5)
+                    if response.status_code in [200, 403]:
+                        return plugin_slug
+                except:
+                    pass
+                return None
 
+            results = await asyncio.gather(*[check_plugin_exists(p) for p in plugins_to_check])
+            for slug in results:
+                if slug:
+                    detected_slugs.add(slug)
+
+        # Now create PluginInfo objects - fetch all readme.txt IN PARALLEL
+        valid_slugs = [
+            s for s in detected_slugs
+            if s and len(s) >= 2 and re.match(r'^[a-z0-9\-_]+$', s, re.IGNORECASE)
+        ]
+
+        async def fetch_plugin_info(plugin_slug: str) -> Optional[PluginInfo]:
             plugin_info = PluginInfo(
                 name=plugin_slug.replace('-', ' ').replace('_', ' ').title()
             )
-
-            # Try to get version and description from readme.txt
             try:
                 readme_url = urljoin(url, f'/wp-content/plugins/{plugin_slug}/readme.txt')
                 response = await self.client.get(readme_url, timeout=5)
                 if response.status_code == 200:
-                    content = response.text[:3000]  # Read more to get description
+                    content = response.text[:3000]
 
-                    # Extract version
                     version_match = re.search(r'Stable tag:\s*([\d.]+)', content, re.IGNORECASE)
                     if version_match:
                         plugin_info.version = version_match.group(1).strip()
 
-                    # Extract description (usually in the header or after === Description ===)
                     desc_patterns = [
-                        r'(?:===\s*Description\s*===\s*)(.*?)(?=\n===|\Z)',  # After === Description ===
-                        r'(?:Description:\s*)(.*?)(?=\n[A-Z][a-z]+:|\n===|\Z)',  # Description: field in header
-                        r'(?:^|\n)(.*?)(?:\n===|\Z)'  # First paragraph after header
+                        r'(?:===\s*Description\s*===\s*)(.*?)(?=\n===|\Z)',
+                        r'(?:Description:\s*)(.*?)(?=\n[A-Z][a-z]+:|\n===|\Z)',
+                        r'(?:^|\n)(.*?)(?:\n===|\Z)'
                     ]
 
                     for pattern in desc_patterns:
                         desc_match = re.search(pattern, content, re.IGNORECASE | re.DOTALL)
                         if desc_match:
                             description = desc_match.group(1).strip()
-                            # Clean up the description
-                            description = ' '.join(description.split())  # Remove extra whitespace
-                            if len(description) > 10:  # Only if we got meaningful text
-                                plugin_info.description = description[:200]  # Limit to 200 chars
+                            description = ' '.join(description.split())
+                            if len(description) > 10:
+                                plugin_info.description = description[:200]
                                 break
             except:
                 pass
+            return plugin_info
 
-            plugins.append(plugin_info)
+        plugin_infos = await asyncio.gather(*[fetch_plugin_info(s) for s in valid_slugs])
+        plugins = [p for p in plugin_infos if p is not None]
 
         return plugins
 
