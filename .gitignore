@@ -113,6 +113,5 @@ Summary_API_Postman_Collection.json
 # wordpress analyzer api postman collection
 WordPress_Analyzer_API_Postman_Collection.json
 
-
-
-
+# example environment variables file
+.env.example

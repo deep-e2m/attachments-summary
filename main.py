@@ -1,18 +1,16 @@
 """
-WordPress Analyzer API - FastAPI application for analyzing WordPress sites.
+Combined API - WordPress Analyzer + Attachment & Video Summary API.
 
 Endpoints:
-1. POST /api/v1/wordpress/analyze - Analyze a WordPress site and extract information
-2. GET /api/v1/wordpress/analyze/{url} - Analyze a WordPress site (GET method)
-3. GET /health - Health check
-
-Detects WordPress version, theme, plugins, PHP version, and security configurations
-without requiring authentication.
+1. GET  /api/v1/wordpress/analyze - Analyze a WordPress site
+2. POST /api/v1/summarize/attachments - Summarize documents from URLs (batch)
+3. POST /api/v1/summarize/video - Summarize videos from URLs (batch)
+4. GET  /health - Health check
 """
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from routes import health_router, wordpress_router
+from routes import health_router, wordpress_router, summarize_router
 from config import get_settings
 
 
@@ -21,39 +19,21 @@ settings = get_settings()
 
 # Initialize FastAPI app
 app = FastAPI(
-    title="WordPress Analyzer API",
+    title="WordPress Analyzer & Summary API",
     description="""
-## API for analyzing WordPress sites without authentication
+## Combined API: WordPress Analysis + Attachment & Video Summarization
 
-This API analyzes WordPress sites similar to Wappalyzer or HackerTarget,
-detecting site information by analyzing publicly accessible data.
+### WordPress Analysis:
+- **GET /api/v1/wordpress/analyze** - Analyze a WordPress site
 
-### Available Endpoints:
+### Summarize:
+- **POST /api/v1/summarize/attachments** - Summarize documents from URLs (PDF, DOCX, TXT)
+- **POST /api/v1/summarize/video** - Summarize videos from URLs (YouTube, Loom, direct)
 
-**WordPress Analysis:**
-- **POST /api/v1/wordpress/analyze** - Analyze a WordPress site (recommended)
-- **GET /api/v1/wordpress/analyze/{url}** - Analyze a WordPress site via GET
-
-### What It Detects:
-- ✅ WordPress version
-- ✅ Active theme (name, version, author)
-- ✅ Active plugins (with optional deep scan)
-- ✅ PHP version (if exposed)
-- ✅ Server information
-- ✅ Security configurations (XML-RPC, REST API, etc.)
-- ✅ Site metadata
-
-**Other:**
+### Other:
 - **GET /health** - Health check
-
-### Features:
-- No authentication required
-- Works with any WordPress site
-- Fast analysis (typically < 5 seconds)
-- Optional deep scan for more thorough plugin detection
-- Respects robots.txt and site policies
     """,
-    version="1.0.0",
+    version="3.0.0",
     swagger_ui_parameters={"defaultModelsExpandDepth": -1}
 )
 
@@ -69,6 +49,7 @@ app.add_middleware(
 # Include routers
 app.include_router(health_router)
 app.include_router(wordpress_router)
+app.include_router(summarize_router)
 
 
 if __name__ == "__main__":

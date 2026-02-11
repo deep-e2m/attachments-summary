@@ -1,5 +1,5 @@
 """
-Configuration settings for the WordPress Analyzer API.
+Configuration settings for the WordPress Analyzer & Summary API.
 """
 from pydantic_settings import BaseSettings
 from pydantic import Field
@@ -11,8 +11,12 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
     # API Settings
-    app_name: str = "WordPress Analyzer API"
+    app_name: str = "WordPress Analyzer & Summary API"
     debug: bool = False
+
+    # ============================================
+    # WordPress Analyzer Settings
+    # ============================================
 
     # HTTP Client Settings
     request_timeout: int = Field(default=30, description="HTTP request timeout in seconds")
@@ -30,6 +34,17 @@ class Settings(BaseSettings):
 
     # Rate Limiting
     rate_limit_requests: int = Field(default=10, description="Max requests per minute per IP")
+
+    # ============================================
+    # Summary Settings (Gemini)
+    # ============================================
+
+    # Gemini Settings
+    gemini_api_key: Optional[str] = Field(default=None, description="Google Gemini API key")
+    gemini_model: str = Field(default="gemini-2.5-flash", description="Gemini model name")
+
+    # File Processing Settings
+    max_file_size_mb: int = Field(default=50, description="Maximum file size in MB")
 
     class Config:
         env_file = ".env"

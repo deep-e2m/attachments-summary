@@ -1,17 +1,15 @@
 """
-Document processor for extracting text from various file formats.
+Document processor for detecting file types, converting DOCX to PDF, and extracting text.
 """
 import os
-from typing import BinaryIO
-from PyPDF2 import PdfReader
-from docx import Document
+import subprocess
 import tempfile
 
 
 class DocumentProcessor:
-    """Process various document types and extract text content."""
+    """Process documents: detect type, extract text."""
 
-    SUPPORTED_EXTENSIONS = {".pdf", ".txt", ".docx"}
+    SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".txt"}
 
     @staticmethod
     def get_file_extension(filename: str) -> str:
@@ -25,105 +23,42 @@ class DocumentProcessor:
         return ext in DocumentProcessor.SUPPORTED_EXTENSIONS
 
     @staticmethod
-    def extract_text_from_pdf(file_content: bytes) -> str:
-        """
-        Extract text from PDF file.
+    def convert_docx_to_pdf(docx_content: bytes) -> bytes:
+        """Convert DOCX to PDF using LibreOffice headless."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            docx_path = os.path.join(tmp_dir, "document.docx")
+            with open(docx_path, "wb") as f:
+                f.write(docx_content)
 
-        Args:
-            file_content: PDF file content as bytes
+            subprocess.run(
+                [
+                    "libreoffice",
+                    "--headless",
+                    "--convert-to", "pdf",
+                    "--outdir", tmp_dir,
+                    docx_path,
+                ],
+                check=True,
+                timeout=120,
+                capture_output=True,
+            )
 
-        Returns:
-            Extracted text content
-        """
-        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp_file:
-            tmp_file.write(file_content)
-            tmp_file_path = tmp_file.name
-
-        try:
-            reader = PdfReader(tmp_file_path)
-            text_content = []
-
-            for page in reader.pages:
-                page_text = page.extract_text()
-                if page_text:
-                    text_content.append(page_text)
-
-            return "\n\n".join(text_content)
-        finally:
-            os.unlink(tmp_file_path)
-
-    @staticmethod
-    def extract_text_from_docx(file_content: bytes) -> str:
-        """
-        Extract text from DOCX file.
-
-        Args:
-            file_content: DOCX file content as bytes
-
-        Returns:
-            Extracted text content
-        """
-        with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as tmp_file:
-            tmp_file.write(file_content)
-            tmp_file_path = tmp_file.name
-
-        try:
-            doc = Document(tmp_file_path)
-            text_content = []
-
-            for paragraph in doc.paragraphs:
-                if paragraph.text.strip():
-                    text_content.append(paragraph.text)
-
-            # Also extract text from tables
-            for table in doc.tables:
-                for row in table.rows:
-                    row_text = [cell.text for cell in row.cells if cell.text.strip()]
-                    if row_text:
-                        text_content.append(" | ".join(row_text))
-
-            return "\n\n".join(text_content)
-        finally:
-            os.unlink(tmp_file_path)
+            pdf_path = os.path.join(tmp_dir, "document.pdf")
+            with open(pdf_path, "rb") as f:
+                return f.read()
 
     @staticmethod
     def extract_text_from_txt(file_content: bytes) -> str:
-        """
-        Extract text from TXT file.
-
-        Args:
-            file_content: TXT file content as bytes
-
-        Returns:
-            Text content
-        """
+        """Extract text from TXT file."""
         try:
             return file_content.decode("utf-8")
         except UnicodeDecodeError:
             return file_content.decode("latin-1")
 
-    @classmethod
-    def extract_text(cls, filename: str, file_content: bytes) -> str:
-        """
-        Extract text from a document based on its type.
-
-        Args:
-            filename: Name of the file (to determine type)
-            file_content: File content as bytes
-
-        Returns:
-            Extracted text content
-
-        Raises:
-            ValueError: If file type is not supported
-        """
-        ext = cls.get_file_extension(filename)
-
-        if ext == ".pdf":
-            return cls.extract_text_from_pdf(file_content)
-        elif ext == ".docx":
-            return cls.extract_text_from_docx(file_content)
-        elif ext == ".txt":
-            return cls.extract_text_from_txt(file_content)
-        else:
-            raise ValueError(f"Unsupported file type: {ext}")
+    @staticmethod
+    def get_filename_from_url(url: str) -> str:
+        """Extract filename from URL."""
+        filename = url.split("/")[-1].split("?")[0]
+        if not filename:
+            filename = "document"
+        return filename

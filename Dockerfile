@@ -8,12 +8,14 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-# Install system dependencies (curl for health checks, minimal build tools for lxml)
+# Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     gcc \
     libxml2-dev \
     libxslt-dev \
+    libreoffice-writer \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching

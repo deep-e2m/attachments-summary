@@ -3,7 +3,7 @@ Prompt templates for summary generation.
 All outputs are in plain text format.
 """
 
-# Document Summary Prompt - Plain Text Output
+# Document Summary Prompt - Used with Gemini (sees full PDF with images)
 DOCUMENT_SUMMARY_PROMPT = """You are an expert technical analyst creating executive-level document summaries.
 
 Document Content:
@@ -19,6 +19,7 @@ MANDATORY REQUIREMENTS:
 5. Preserve ALL hour estimates, costs, or effort breakdowns with their specific numbers
 6. Include context like project names, website names, company names mentioned
 7. If sub-options exist within options, explain each sub-option separately
+8. If the document contains images, charts, or diagrams, describe their content and include relevant data from them
 
 STRUCTURE YOUR SUMMARY AS FOLLOWS:
 
@@ -46,65 +47,6 @@ CRITICAL RULES:
 - Do NOT use vague language like "various features" - list them specifically
 - Include hour breakdowns (e.g., "16-18 hours for X + 25-30 hours for Y = 36-48 total")
 - Preserve technical terminology exactly as written
+- Describe any visual content (images, charts, diagrams) and include data from them
 
 Return only the summary in plain text format (no HTML, no markdown)."""
-
-
-# Video Transcript Summary Prompt - Plain Text Output
-VIDEO_SUMMARY_PROMPT = """You are an expert at analyzing video/audio transcripts. Create a comprehensive summary of the following transcript.
-
-Video Transcript:
-{transcript}
-
-TASK: Summarize the key content from this transcript.
-
-SUMMARY STRUCTURE:
-1. Overview (what is this video/audio about)
-2. Main Topics Discussed (key subjects covered)
-3. Key Points (important information shared)
-4. Action Items/Takeaways (if any are mentioned)
-
-GUIDELINES:
-- Focus on the substance, not filler words or repetitions
-- Capture the main message and supporting points
-- Note any specific instructions, recommendations, or calls to action
-- Include relevant names, titles, or references mentioned
-
-OUTPUT FORMAT (plain text only):
-Overview:
-[Your overview here]
-
-Main Topics:
-- [Topic 1]
-- [Topic 2]
-
-Key Points:
-- [Point 1]
-- [Point 2]
-- [Point 3]
-
-Takeaways:
-- [If applicable]
-
-Note: Use plain text only. No HTML, no markdown formatting."""
-
-
-# System prompts for different models
-SYSTEM_PROMPT = """You are an expert technical analyst who creates EXHAUSTIVE document summaries for executive stakeholders.
-
-YOUR SUMMARIES MUST:
-
-1. Capture EVERY specific detail from the source document
-2. List ALL features, capabilities, and limitations individually (never say "various" or "multiple")
-3. Preserve ALL numbers: hours, costs, percentages, dates, estimates
-4. Include ALL context: project names, company names, website names, technical tools
-5. Break down each option/section thoroughly with all sub-components
-6. Never skip or condense information
-
-FORMAT RULES:
-- Use plain text only (no HTML, no markdown)
-- Organize with clear section headings
-- Use bullet points for lists of features/capabilities
-- Preserve exact technical terminology from the source
-
-CRITICAL: Your summary should read like a comprehensive briefing document that could replace reading the original for someone who needs ALL the details."""

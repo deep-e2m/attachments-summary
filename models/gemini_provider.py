@@ -1,19 +1,19 @@
 """
-Google Gemini model provider using the new google.genai library.
+Google Gemini model provider using the google.genai library.
 """
 from google import genai
 from google.genai import types
 import httpx
 import tempfile
 import os
-import time
 import asyncio
+import yt_dlp
 from typing import Optional
 from .base import BaseModelProvider
 
 
 class GeminiProvider(BaseModelProvider):
-    """Provider for Google Gemini models using the new google.genai library."""
+    """Provider for Google Gemini models."""
 
     def __init__(self, model_name: str = "gemini-2.5-flash", api_key: Optional[str] = None):
         super().__init__(model_name)
@@ -21,41 +21,40 @@ class GeminiProvider(BaseModelProvider):
         self.client = genai.Client(api_key=api_key)
         self.model_name = model_name
 
-    async def generate(self, prompt: str, system_prompt: Optional[str] = None) -> str:
-        """
-        Generate a response using Gemini.
+    @staticmethod
+    def _extract_usage(response) -> dict:
+        """Extract token usage from Gemini response."""
+        usage = getattr(response, "usage_metadata", None)
+        if not usage:
+            return {"input_tokens": 0, "output_tokens": 0, "thinking_tokens": 0, "total_tokens": 0}
+        input_tokens = getattr(usage, "prompt_token_count", 0) or 0
+        output_tokens = getattr(usage, "candidates_token_count", 0) or 0
+        thinking_tokens = getattr(usage, "thoughts_token_count", 0) or 0
+        return {
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "thinking_tokens": thinking_tokens,
+            "total_tokens": input_tokens + output_tokens + thinking_tokens,
+        }
 
-        Args:
-            prompt: The user prompt
-            system_prompt: Optional system prompt
-
-        Returns:
-            Generated text response
-        """
+    async def generate(self, prompt: str, system_prompt: Optional[str] = None) -> dict:
+        """Generate a text response using Gemini. Returns dict with text and usage."""
         full_prompt = prompt
         if system_prompt:
             full_prompt = f"{system_prompt}\n\n{prompt}"
 
         try:
-            response = self.client.models.generate_content(
+            response = await asyncio.to_thread(
+                self.client.models.generate_content,
                 model=self.model_name,
                 contents=full_prompt
             )
-            return response.text
+            return {"text": response.text, "usage": self._extract_usage(response)}
         except Exception as e:
             raise Exception(f"Gemini generation failed: {str(e)}")
 
     def generate_sync(self, prompt: str, system_prompt: Optional[str] = None) -> str:
-        """
-        Synchronous version of generate.
-
-        Args:
-            prompt: The user prompt
-            system_prompt: Optional system prompt
-
-        Returns:
-            Generated text response
-        """
+        """Synchronous version of generate."""
         full_prompt = prompt
         if system_prompt:
             full_prompt = f"{system_prompt}\n\n{prompt}"
@@ -69,86 +68,70 @@ class GeminiProvider(BaseModelProvider):
         except Exception as e:
             raise Exception(f"Gemini generation failed: {str(e)}")
 
-    def _wait_for_file_processing(self, uploaded_file) -> None:
-        """Wait for file to finish processing."""
+    async def _wait_for_file_processing(self, uploaded_file):
+        """Wait for file to finish processing without blocking the event loop."""
         while uploaded_file.state.name == "PROCESSING":
-            time.sleep(2)
-            uploaded_file = self.client.files.get(name=uploaded_file.name)
+            await asyncio.sleep(1)
+            uploaded_file = await asyncio.to_thread(
+                self.client.files.get, name=uploaded_file.name
+            )
 
         if uploaded_file.state.name == "FAILED":
             raise Exception("Gemini file processing failed")
 
         return uploaded_file
 
-    async def summarize_video_file(self, file_content: bytes, filename: str, prompt: str) -> dict:
+    # MIME type mapping for documents
+    MIME_TYPES = {
+        ".pdf": "application/pdf",
+        ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ".txt": "text/plain",
+    }
+
+    async def summarize_document(self, file_content: bytes, filename: str, prompt: str) -> dict:
         """
-        Upload video file to Gemini File API and generate summary.
+        Summarize a document using Gemini inline data (no File API upload needed).
+        Sends the file directly in the request — much faster than upload/wait/delete cycle.
+        Supports PDF and DOCX natively.
 
         Args:
-            file_content: Video file content as bytes
-            filename: Original filename
+            file_content: File content as bytes
+            filename: Original filename (used for MIME type detection)
             prompt: The prompt for summarization
 
         Returns:
             Dict with summary
         """
-        tmp_file_path = None
-        uploaded_file = None
-
         try:
-            # Determine file extension
-            ext = os.path.splitext(filename)[1].lower() or ".mp4"
+            ext = os.path.splitext(filename)[1].lower() or ".pdf"
+            mime_type = self.MIME_TYPES.get(ext, "application/pdf")
 
-            # Save to temp file
-            with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp_file:
-                tmp_file.write(file_content)
-                tmp_file_path = tmp_file.name
-
-            # Upload to Gemini File API
-            uploaded_file = self.client.files.upload(file=tmp_file_path)
-
-            # Wait for file to be processed
-            uploaded_file = self._wait_for_file_processing(uploaded_file)
-
-            # Generate content with the video
-            response = self.client.models.generate_content(
+            response = await asyncio.to_thread(
+                self.client.models.generate_content,
                 model=self.model_name,
-                contents=[uploaded_file, prompt]
+                contents=types.Content(
+                    parts=[
+                        types.Part(
+                            inline_data=types.Blob(data=file_content, mime_type=mime_type)
+                        ),
+                        types.Part(text=prompt),
+                    ]
+                ),
             )
 
-            return {
-                "summary": response.text
-            }
+            return {"summary": response.text, "usage": self._extract_usage(response)}
 
         except Exception as e:
-            raise Exception(f"Gemini video processing failed: {str(e)}")
-        finally:
-            # Cleanup temp file
-            if tmp_file_path and os.path.exists(tmp_file_path):
-                os.unlink(tmp_file_path)
-            # Cleanup uploaded file from Gemini
-            if uploaded_file:
-                try:
-                    self.client.files.delete(name=uploaded_file.name)
-                except:
-                    pass
+            raise Exception(f"Gemini document processing failed: {str(e)}")
 
     async def summarize_video_url(self, video_url: str, prompt: str) -> dict:
         """
         Download video from URL, upload to Gemini File API, and generate summary.
-
-        Args:
-            video_url: URL of the video to process
-            prompt: The prompt for summarization
-
-        Returns:
-            Dict with summary and transcript
         """
         tmp_file_path = None
         uploaded_file = None
 
         try:
-            # Download video from URL
             headers = {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                 "Accept": "*/*",
@@ -159,28 +142,25 @@ class GeminiProvider(BaseModelProvider):
                 response.raise_for_status()
                 video_content = response.content
 
-            # Save to temp file
             with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp_file:
                 tmp_file.write(video_content)
                 tmp_file_path = tmp_file.name
 
-            # Upload to Gemini File API
-            uploaded_file = self.client.files.upload(file=tmp_file_path)
+            uploaded_file = await asyncio.to_thread(
+                self.client.files.upload, file=tmp_file_path
+            )
+            uploaded_file = await self._wait_for_file_processing(uploaded_file)
 
-            # Wait for file to be processed
-            uploaded_file = self._wait_for_file_processing(uploaded_file)
-
-            # Generate content with the video
-            response = self.client.models.generate_content(
+            response = await asyncio.to_thread(
+                self.client.models.generate_content,
                 model=self.model_name,
                 contents=[uploaded_file, prompt]
             )
 
-            summary = response.text
-
             return {
-                "summary": summary,
-                "transcript": "Transcript extracted by Gemini (embedded in summary)"
+                "summary": response.text,
+                "transcript": "Transcript extracted by Gemini (embedded in summary)",
+                "usage": self._extract_usage(response),
             }
 
         except httpx.HTTPStatusError as e:
@@ -188,62 +168,21 @@ class GeminiProvider(BaseModelProvider):
         except Exception as e:
             raise Exception(f"Gemini video processing failed: {str(e)}")
         finally:
-            # Cleanup temp file
             if tmp_file_path and os.path.exists(tmp_file_path):
                 os.unlink(tmp_file_path)
-            # Cleanup uploaded file from Gemini
             if uploaded_file:
                 try:
-                    self.client.files.delete(name=uploaded_file.name)
+                    await asyncio.to_thread(
+                        self.client.files.delete, name=uploaded_file.name
+                    )
                 except:
                     pass
 
-    async def summarize_video_inline(self, file_content: bytes, prompt: str, mime_type: str = "video/mp4") -> dict:
-        """
-        Summarize video by passing it inline (for videos under 20MB).
-
-        Args:
-            file_content: Video file content as bytes
-            prompt: The prompt for summarization
-            mime_type: MIME type of the video (default: video/mp4)
-
-        Returns:
-            Dict with summary
-        """
-        try:
-            response = self.client.models.generate_content(
-                model=self.model_name,
-                contents=types.Content(
-                    parts=[
-                        types.Part(
-                            inline_data=types.Blob(data=file_content, mime_type=mime_type)
-                        ),
-                        types.Part(text=prompt)
-                    ]
-                )
-            )
-
-            return {
-                "summary": response.text
-            }
-
-        except Exception as e:
-            raise Exception(f"Gemini inline video processing failed: {str(e)}")
-
     async def summarize_youtube_url(self, youtube_url: str, prompt: str) -> dict:
-        """
-        Summarize a YouTube video directly using its URL.
-        Gemini supports YouTube URLs natively without downloading.
-
-        Args:
-            youtube_url: YouTube video URL (e.g., https://www.youtube.com/watch?v=xxxxx)
-            prompt: The prompt for summarization
-
-        Returns:
-            Dict with summary and transcript
-        """
+        """Summarize a YouTube video directly using its URL (Gemini supports natively)."""
         try:
-            response = self.client.models.generate_content(
+            response = await asyncio.to_thread(
+                self.client.models.generate_content,
                 model=self.model_name,
                 contents=[
                     types.Content(
@@ -262,7 +201,8 @@ class GeminiProvider(BaseModelProvider):
 
             return {
                 "summary": response.text,
-                "transcript": "Transcript extracted by Gemini (embedded in summary)"
+                "transcript": "Transcript extracted by Gemini (embedded in summary)",
+                "usage": self._extract_usage(response),
             }
 
         except Exception as e:
@@ -287,129 +227,70 @@ class GeminiProvider(BaseModelProvider):
 
     @staticmethod
     def extract_loom_video_id(url: str) -> str:
-        """
-        Extract video ID from Loom URL.
-
-        Examples:
-            https://www.loom.com/share/abc123def456 -> abc123def456
-            https://www.loom.com/share/abc123def456?sid=xyz -> abc123def456
-            https://www.loom.com/embed/abc123def456 -> abc123def456
-        """
-        # Remove query parameters
+        """Extract video ID from Loom URL."""
         url = url.split('?')[0]
-        # Get the last path segment (video ID)
         return url.rstrip('/').split('/')[-1]
 
-    async def get_loom_download_url(self, loom_url: str) -> str:
-        """
-        Get direct download URL from Loom share URL using Loom's API.
+    async def download_loom_video(self, loom_url: str) -> str:
+        """Download Loom video as MP4 using yt-dlp. Returns path to temp file."""
+        tmp_dir = tempfile.mkdtemp()
+        output_path = os.path.join(tmp_dir, "loom_video.webm")
 
-        Args:
-            loom_url: Loom share URL (e.g., https://www.loom.com/share/abc123)
-
-        Returns:
-            Direct download URL for the video
-        """
-        video_id = self.extract_loom_video_id(loom_url)
-
-        # Loom's API endpoint to get transcoded video URL
-        api_url = f"https://www.loom.com/api/campaigns/sessions/{video_id}/transcoded-url"
-
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Accept": "application/json",
-            "Content-Type": "application/json",
+        ydl_opts = {
+            "format": "bestvideo+bestaudio/best",
+            "outtmpl": output_path,
+            "merge_output_format": "webm",
+            "quiet": True,
+            "no_warnings": True,
         }
 
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(api_url, headers=headers)
-            response.raise_for_status()
-            data = response.json()
+        def _download():
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([loom_url])
+            if not os.path.exists(output_path):
+                raise Exception("yt-dlp download completed but output file not found")
+            return output_path
 
-            if "url" not in data:
-                raise Exception("Could not get download URL from Loom API")
-
-            return data["url"]
+        return await asyncio.to_thread(_download)
 
     async def summarize_loom_url(self, loom_url: str, prompt: str) -> dict:
-        """
-        Summarize a Loom video by extracting download URL, downloading, and uploading to Gemini.
-
-        This follows the same approach as your colleague's TypeScript implementation:
-        1. Extract video ID from Loom share URL
-        2. Get direct download URL from Loom API
-        3. Download the video
-        4. Upload to Gemini File API
-        5. Wait for processing
-        6. Generate summary
-
-        Args:
-            loom_url: Loom share URL (e.g., https://www.loom.com/share/abc123)
-            prompt: The prompt for summarization
-
-        Returns:
-            Dict with summary and transcript
-        """
+        """Summarize a Loom video: download via yt-dlp, upload to Gemini, generate summary."""
         tmp_file_path = None
         uploaded_file = None
 
         try:
-            # Step 1 & 2: Get direct download URL from Loom
-            download_url = await self.get_loom_download_url(loom_url)
+            tmp_file_path = await self.download_loom_video(loom_url)
 
-            # Step 3: Download the video
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                "Accept": "*/*",
-            }
+            uploaded_file = await asyncio.to_thread(
+                self.client.files.upload, file=tmp_file_path
+            )
+            uploaded_file = await self._wait_for_file_processing(uploaded_file)
 
-            async with httpx.AsyncClient(timeout=300.0, follow_redirects=True) as client:
-                response = await client.get(download_url, headers=headers)
-                response.raise_for_status()
-                video_content = response.content
-
-            # Step 4: Save to temp file and upload to Gemini File API
-            video_id = self.extract_loom_video_id(loom_url)
-            filename = f"loom_video_{video_id}.mp4"
-
-            with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp_file:
-                tmp_file.write(video_content)
-                tmp_file_path = tmp_file.name
-
-            # Upload to Gemini File API
-            uploaded_file = self.client.files.upload(file=tmp_file_path)
-
-            # Step 5: Wait for file to be processed
-            uploaded_file = self._wait_for_file_processing(uploaded_file)
-
-            # Step 6: Generate content with the video
-            response = self.client.models.generate_content(
+            response = await asyncio.to_thread(
+                self.client.models.generate_content,
                 model=self.model_name,
                 contents=[uploaded_file, prompt]
             )
 
-            summary = response.text
-
             return {
-                "summary": summary,
+                "summary": response.text,
                 "transcript": "Transcript extracted by Gemini (embedded in summary)",
-                "video_id": video_id,
-                "filename": filename
+                "usage": self._extract_usage(response),
             }
 
-        except httpx.HTTPStatusError as e:
-            if e.response.status_code == 404:
-                raise Exception(f"Loom video not found or not publicly accessible: {loom_url}")
-            raise Exception(f"Failed to download Loom video: HTTP {e.response.status_code}")
         except Exception as e:
             raise Exception(f"Loom video processing failed: {str(e)}")
         finally:
-            # Cleanup temp file
-            if tmp_file_path and os.path.exists(tmp_file_path):
-                os.unlink(tmp_file_path)
-            # Cleanup uploaded file from Gemini
+            if tmp_file_path:
+                try:
+                    os.unlink(tmp_file_path)
+                    os.rmdir(os.path.dirname(tmp_file_path))
+                except:
+                    pass
             if uploaded_file:
                 try:
-                    self.client.files.delete(name=uploaded_file.name)
+                    await asyncio.to_thread(
+                        self.client.files.delete, name=uploaded_file.name
+                    )
                 except:
                     pass

@@ -1,0 +1,227 @@
+{
+	"info": {
+		"_postman_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+		"name": "WordPress Analyzer & Summary API",
+		"description": "Combined API for WordPress site analysis and document/video summarization using Gemini.\n\n## Available Endpoints:\n- **WordPress** - Analyze WordPress sites (version, theme, plugins)\n- **Summarize** - Summarize documents and videos from URLs using Gemini 2.5 Flash\n- **Health** - Health check\n\n## Model: Gemini 2.5 Flash (for all summarization)\n\n## Version: 3.0.0",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8000",
+			"type": "string"
+		}
+	],
+	"item": [
+		{
+			"name": "Health",
+			"item": [
+				{
+					"name": "Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/health",
+							"host": ["{{base_url}}"],
+							"path": ["health"]
+						},
+						"description": "Health check endpoint to verify the API is running."
+					},
+					"response": [
+						{
+							"name": "Success",
+							"originalRequest": {
+								"method": "GET",
+								"url": {
+									"raw": "{{base_url}}/health",
+									"host": ["{{base_url}}"],
+									"path": ["health"]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"body": "{\n    \"status\": \"healthy\",\n    \"version\": \"3.0.0\"\n}"
+						}
+					]
+				}
+			],
+			"description": "Health check endpoints"
+		},
+		{
+			"name": "WordPress",
+			"item": [
+				{
+					"name": "Analyze WordPress Site",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/wordpress/analyze?url=https://wordpress.org",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "wordpress", "analyze"],
+							"query": [
+								{
+									"key": "url",
+									"value": "https://wordpress.org",
+									"description": "WordPress site URL to analyze"
+								}
+							]
+						},
+						"description": "## Analyze a WordPress site\n\nDetects WordPress version, theme, plugins, and site metadata without authentication.\n\n### Query Parameters:\n- `url` (required) - The WordPress site URL to analyze"
+					},
+					"response": [
+						{
+							"name": "Success - WordPress Site",
+							"originalRequest": {
+								"method": "GET",
+								"url": {
+									"raw": "{{base_url}}/api/v1/wordpress/analyze?url=https://wordpress.org",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "wordpress", "analyze"],
+									"query": [
+										{
+											"key": "url",
+											"value": "https://wordpress.org"
+										}
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"body": "{\n    \"success\": true,\n    \"summary\": \"WordPress Version: 6.4.2\\nTheme: flavor (v1.0.0)\\n\\nActive Plugins (3):\\n  - Jetpack (v12.1)\\n  - Yoast SEO (v21.6)\\n  - Akismet (v5.3)\\n\\nSite Title: WordPress.org\"\n}"
+						},
+						{
+							"name": "Not a WordPress Site",
+							"originalRequest": {
+								"method": "GET",
+								"url": {
+									"raw": "{{base_url}}/api/v1/wordpress/analyze?url=https://google.com",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "wordpress", "analyze"],
+									"query": [
+										{
+											"key": "url",
+											"value": "https://google.com"
+										}
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"body": "{\n    \"success\": false,\n    \"summary\": \"The site 'https://google.com' is not a WordPress site.\"\n}"
+						}
+					]
+				}
+			],
+			"description": "WordPress site analysis endpoints"
+		},
+		{
+			"name": "Summarize",
+			"item": [
+				{
+					"name": "Summarize Attachments (URLs)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "[\n    \"https://example.com/doc1.pdf\",\n    \"https://example.com/doc2.docx\",\n    \"https://example.com/doc3.txt\"\n]"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/summarize/attachments",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "summarize", "attachments"]
+						},
+						"description": "## Summarize documents from URLs using Gemini 2.5 Flash\n\nDownloads PDF, DOCX, or TXT files from URLs and generates summaries.\nGemini sees both text AND images inside PDFs.\n\n### Supported File Types:\n- **PDF** - Sent directly to Gemini (text + images)\n- **DOCX** - Converted to PDF first, then sent to Gemini (preserves images)\n- **TXT** - Text content sent to Gemini\n\n### Model: Gemini 2.5 Flash\n\n### Request Body:\n```json\n[\n    \"https://example.com/doc1.pdf\",\n    \"https://example.com/doc2.docx\"\n]\n```"
+					},
+					"response": [
+						{
+							"name": "Success",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "[\n    \"https://example.com/doc1.pdf\",\n    \"https://example.com/doc2.docx\"\n]"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/summarize/attachments",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "summarize", "attachments"]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"body": "{\n    \"success\": true,\n    \"results\": {\n        \"https://example.com/doc1.pdf\": \"Overview:\\nThis document is about...\\n\\nKey Points:\\n- Point 1\\n- Point 2\",\n        \"https://example.com/doc2.docx\": \"Overview:\\nThis document covers...\\n\\nKey Points:\\n- Point A\\n- Point B\"\n    },\n    \"errors\": {}\n}"
+						}
+					]
+				},
+				{
+					"name": "Summarize Video URLs",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "[\n    \"https://www.youtube.com/watch?v=xxxxx\",\n    \"https://www.loom.com/share/abc123def456\",\n    \"https://example.com/video.mp4\"\n]"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/summarize/video",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "summarize", "video"]
+						},
+						"description": "## Summarize videos from URLs using Gemini 2.5 Flash\n\n### Supported URL Types:\n- **YouTube URLs** - Passed directly to Gemini (no download needed)\n- **Loom URLs** - Extracts download URL via Loom API, downloads and uploads to Gemini\n- **Direct video URLs** (.mp4, .mov, etc.) - Downloaded and uploaded to Gemini File API\n\n### Model: Gemini 2.5 Flash"
+					},
+					"response": [
+						{
+							"name": "Success",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "[\n    \"https://www.youtube.com/watch?v=xxxxx\"\n]"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/summarize/video",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "summarize", "video"]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"body": "{\n    \"success\": true,\n    \"results\": {\n        \"https://www.youtube.com/watch?v=xxxxx\": {\n            \"summary\": \"Overview:\\nThis video is about...\\n\\nMain Topics:\\n- Topic 1\\n- Topic 2\\n\\nKey Points:\\n- Point 1\\n- Point 2\",\n            \"transcript\": \"Transcript extracted by Gemini (embedded in summary)\"\n        }\n    },\n    \"errors\": {}\n}"
+						}
+					]
+				}
+			],
+			"description": "Summarize documents and videos from URLs using Gemini 2.5 Flash"
+		}
+	]
+}

@@ -25,6 +25,7 @@ services:
 
       # Rate Limiting
       - RATE_LIMIT_REQUESTS=10
+      
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
